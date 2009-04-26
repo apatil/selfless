@@ -1,5 +1,6 @@
 (defmacro structmap-and-accessors [sym & fields]
-    "Defunes a structmap with given symbol, and defines accessors for all its fields."
+    "Defunes a structmap with given symbol, and defines accessors 
+    for all its fields."
     (let [code-lst `(defstruct ~sym ~@fields)
             sym-dash (.concat (name sym) "-")
             accessor-names (zipmap fields (map (comp #(.concat sym-dash %) name) fields))]
@@ -10,7 +11,8 @@
 (structmap-and-accessors node :fn :parents :children :block?)
 
 (defn add-node [label fun flow block? & [args]]
-    "Adds fun to the dataflow flow, with label 'label', which must be unique."
+    "Adds fun as a node to the dataflow flow, with label 'label'. 
+    Labels must be unique within dataflows."
     (if (flow label) 
         (throw (Exception. (.concat "Node label already taken: " (name label))))
         (let [
@@ -27,14 +29,15 @@
                 (reduce add-child new-flow parents)
                 new-flow))))
 
-(defn new-state [flow]
-    "A new, all-nil state.")
-
 (defn notify-children [flow state label]
     "Notifies the children of a label that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
     (reduce #(  ) state children))
+
+(defn compute-state [flow state label]
+    "Utility function for computing flow's state at label.
+    Should only be called when all parents are ready.")
 
 (defn change-state [flow state new-substate]
     "Sets the flow's value at certain labels to new values.
