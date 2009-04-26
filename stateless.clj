@@ -27,15 +27,15 @@
                 (reduce add-child new-flow parents)
                 new-flow))))
 
-(defn notify [flow flow-map label]
+(defn notify [children state label]
     "Notifies the children of a label that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
-    (reduce #(  ) flow (get-children (flow label))))
+    (reduce #(  ) state children))
 
-(defn change-flow [flow flow-map new-val-map]
+(defn change-state [flow state new-substate]
     "Sets the flow's value at certain labels to new values."
-    (reduce #(  ) flow val-map))
+    (reduce #(  ) state new-substate))
         
 (def fn1 #())       
 (defn fn2 [a b c d e] [a b c d e])     
