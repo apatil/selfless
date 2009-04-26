@@ -47,6 +47,10 @@
     value of any label is not nil, it is left alone. If 
     eager, values are recomputed."
     (reduce #(  ) state labels))
+
+(defn concurrent-eval-state [flow state labels]
+    "Like eval-state, but updates are done concurrently when
+    possible.")
         
 (def fn1 #())       
 (defn fn2 [a b c d e] [a b c d e])     
