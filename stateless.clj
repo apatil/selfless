@@ -27,15 +27,26 @@
                 (reduce add-child new-flow parents)
                 new-flow))))
 
-(defn notify [children state label]
+(defn new-state [flow]
+    "A new, all-nil state.")
+
+(defn notify-children [flow state label]
     "Notifies the children of a label that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
     (reduce #(  ) state children))
 
 (defn change-state [flow state new-substate]
-    "Sets the flow's value at certain labels to new values."
+    "Sets the flow's value at certain labels to new values.
+    Notifies children of change."
     (reduce #(  ) state new-substate))
+    
+(defn eval-state [flow state labels]
+    "Evaluates the flow's state at given labels. Propagates
+    message of recomputation to parents. Lazy by default; if
+    value of any label is not nil, it is left alone. If 
+    eager, values are recomputed."
+    (reduce #(  ) state labels))
         
 (def fn1 #())       
 (defn fn2 [a b c d e] [a b c d e])     
