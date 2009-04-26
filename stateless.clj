@@ -12,7 +12,7 @@
 (defn add-fn [label fun flow & [args]]
     "Adds fun to the dataflow flow, with label 'label', which must be unique."
     (if (flow label) 
-        (throw (Exception. "Node label already taken."))
+        (throw (Exception. (.concat "Node label already taken: " (name label))))
         (let [
             ; Parents are nodes in the flow
             parents (set (filter #(if (flow %) 1 0) args))   
@@ -33,3 +33,4 @@
 (def flow (add-fn :fn1 fn1 {} []))
 (def flow2 (add-fn :fn2 fn2 flow [:fn1 3 :fn1 2 5]))
 (def flow3 (add-fn :fn3 fn3 flow2 [:fn2]))
+(def flow3 (add-fn :fn3 fn3 flow3 [:fn2]))
