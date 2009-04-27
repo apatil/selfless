@@ -17,7 +17,7 @@
         (throw (Exception. (.concat "Node label already taken: " (name label))))
         (let [
             ; Parents are nodes in the flow
-            parents (set (filter #(if (flow %) 1 0) args))   
+            parents (set (filter (fn [key] (flow key)) args))   
             ; A partially-applied version of the function that takes nodes only
             pfun #(apply fun (replace % args))                  
             ; The flow, with the new function added
@@ -29,37 +29,64 @@
                 (reduce add-child new-flow parents)
                 new-flow))))
 
-(defn notify-children [flow state label]
+(defn notify-children [node state]
     "Notifies the children of a label that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
-    (reduce #(  ) state children))
+    (reduce #(  ) state (node-children node)))
 
-(defn compute-state [flow state label]
+(defn parent-vals [parents state]
+    "Accumulates the node's parents' values. Returns a map.
+    The map may have nil's."
+    (let [vals (map state parents)]
+        (zipmap parents vals)))
+
+(defn compute [node parent-vals]
     "Utility function for computing flow's state at label.
-    Should only be called when all parents are ready.")
+    Should only be called when all parents are ready."
+    ((node-fn node) parent-vals))
 
-(defn change-state [flow state new-substate]
+(defn change [flow state new-substate]
     "Sets the flow's value at certain labels to new values.
     Notifies children of change."
     (reduce #(  ) state new-substate))
+
+(defn update [flow key state]
+    "Updates the state with the value corresponding to key,
+    and any ancestral values necessary to compute it."
+    (let [;lala (print "call\n")
+            node (flow key)
+            parents (node-parents node)
+            ;qqq (print "\tkey " key "\n")  
+            ;qqq (print "\tparents " parents "\n")            
+            pval-map (parent-vals parents state)
+            ;qqq (print "\tpval-map " pval-map "\n")            
+            reduce-fn (fn [s kv]
+                (let [key (kv 0) val (kv 1)]
+                    ;lala (print "\tkv " kv  "\n")
+                    ;lala (print "\tkey " key "\n")
+                    ;lala (print "\tval " val "\n")] 
+                    (if val s (update flow key s))))
+            new-state (if (> (count parents) 0) (reduce reduce-fn state pval-map) state)
+            ;qqq (print "\tnew-state " new-state "\n")   
+            new-val (compute node (parent-vals parents new-state))]
+            ;qqq (print "\tnew-val " new-val "\n")]
+        (assoc new-state key new-val)))
     
-(defn eval-state [flow state labels]
+(defn evaluate [flow state labels]
     "Evaluates the flow's state at given labels. Propagates
     message of recomputation to parents. Lazy by default; if
     value of any label is not nil, it is left alone. If 
     eager, values are recomputed."
     (reduce #(  ) state labels))
 
-(defn concurrent-eval-state [flow state labels]
-    "Like eval-state, but updates are done concurrently when
-    possible.")
+;(defn concurrent-eval-state [flow state labels]
+;    "Like eval-state, but updates are done concurrently when
+;    possible.")
         
-(def fn1 #())       
+(def fn1 (fn [] 3))       
 (defn fn2 [a b c d e] [a b c d e])     
 (defn fn3 [fn2] (apply + fn2))
 (def flow (add-node :fn1 fn1 {} false []))
-(def flow2 (add-node :fn2 fn2 flow false [:fn1 3 :fn1 2 5]))
+(def flow2 (add-node :fn2 fn2 flow false [:fn1 17 :fn1 2 5]))
 (def flow3 (add-node :fn3 fn3 flow2 false [:fn2]))
-; Error here
-(def flow3 (add-node :fn3 fn3 flow3 [:fn2]))
