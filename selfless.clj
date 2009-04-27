@@ -10,30 +10,44 @@
                 
 (structmap-and-accessors node :fn :parents :children :block?)
 
-(defn add-node [label fun flow block? & [args]]
-    "Adds fun as a node to the dataflow flow, with label 'label'. 
+(defn add-node [flow key fun block? & [args]]
+    "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
-    (if (flow label) 
-        (throw (Exception. (.concat "Node label already taken: " (name label))))
+    (if (flow key) 
+        (throw (Exception. (.concat "Node key already taken: " (name key))))
         (let [
             ; Parents are nodes in the flow
             parents (set (filter (fn [key] (flow key)) args))   
             ; A partially-applied version of the function that takes nodes only
             pfun #(apply fun (replace % args))                  
             ; The flow, with the new function added
-            new-flow (assoc flow label (struct node pfun parents #{} block?))
-            ; A function adding label to the children list of a parent.
-            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) label))))] 
+            new-flow (assoc flow key (struct node pfun parents #{} block?))
+            ; A function adding key to the children list of a parent.
+            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
             (if parents
                 (reduce add-child new-flow parents)
                 new-flow))))
+                
+(defn add-root [flow key] (add-node key #() flow true []))
 
-(defn notify-children [node state]
-    "Notifies the children of a label that it has changed. 
+(defn child-tree [flow state key]
+    (tree-seq state #(node-children (flow %)) key))
+    
+(defn parent-tree [flow state key]
+    (tree-seq (comp not state) #(node-parents (flow %)) key))
+
+(defn notify-children [flow key state]
+    "Notifies the children of a key that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
-    (reduce #(  ) state (node-children node)))
+    (let [tree (child-tree flow state key)]
+        (reduce dissoc state tree)))
+
+(defn change [flow state new-substate]
+    "Sets the flow's value at certain keys to new values.
+    Notifies children of change."
+    (merge (reduce (notify-reduce flow notify-children) state (keys new-substate)) new-substate))
 
 (defn parent-vals [parents state]
     "Accumulates the node's parents' values. Returns a map.
@@ -42,45 +56,44 @@
         (zipmap parents vals)))
 
 (defn compute [node parent-vals]
-    "Utility function for computing flow's state at label.
+    "Utility function for computing flow's state at key.
     Should only be called when all parents are ready."
     ((node-fn node) parent-vals))
 
-(defn change [flow state new-substate]
-    "Sets the flow's value at certain labels to new values.
-    Notifies children of change."
-    (reduce #(  ) state new-substate))
-
-(defn update [flow key state]
+(defn eval-node [flow state key]
     "Updates the state with the value corresponding to key,
     and any ancestral values necessary to compute it."
-    (if (state key) (state key)
-        (let [node (flow key)
-            parents (node-parents node)
-            pval-map (parent-vals parents state)
-            ; Reduce-fn reduces over the parent value map, updating the curent state as it goes.
-            reduce-fn (fn [s kv]
-                (let [key (kv 0) val (kv 1)]
-                    (if val s (update flow key s))))
-            new-state (if (> (count parents) 0) (reduce reduce-fn state pval-map) state)
-            new-val (compute node (parent-vals parents new-state))]
-        (assoc new-state key new-val))))
+    (let [cur-val (state key)]
+        (if cur-val cur-val
+            (let [node (flow key)
+                parents (node-parents node)
+                n-parents (count parents)
+                pval-map (parent-vals parents state)
+                ; Reduce-fn reduces over the parent value map, updating the curent state as it goes.
+                reduce-fn (if (> n-parents 0) 
+                    (fn [s kv]
+                        (let [key (kv 0) val (kv 1)]
+                            (if val s (eval-node flow key s)))))
+                new-state (if (= n-parents 0) state (reduce reduce-fn state pval-map))
+                new-val (compute node (parent-vals parents new-state))]
+            (assoc new-state key new-val)))))
     
-(defn evaluate [flow state labels]
-    "Evaluates the flow's state at given labels. Propagates
-    message of recomputation to parents. Lazy by default; if
-    value of any label is not nil, it is left alone. If 
-    eager, values are recomputed."
-    (let [new-state (reduce (fn [state key] (update flow key state)) state labels)]
-        [(map new-state labels) new-state]))
-
-;(defn concurrent-eval-state [flow state labels]
+(defn eval-nodes [flow state keys]
+    "Evaluates the state at given keys. Propagates message of 
+    recomputation to parents. Lazy by default; if value of any 
+    key is not nil, it is left alone. If eager, values are 
+    recomputed."
+    (let [new-state (reduce (fn [state key] (eval-node flow state key)) state keys)]
+        new-state))
+        
+;(defn concurrent-eval-state [flow state keys]
 ;    "Like eval-state, but updates are done concurrently when
 ;    possible.")
         
 (def fn1 (fn [] 3))       
 (defn fn2 [a b c d e] [a b c d e])     
 (defn fn3 [fn2] (apply + fn2))
-(def flow (add-node :fn1 fn1 {} false []))
-(def flow2 (add-node :fn2 fn2 flow false [:fn1 17 :fn1 2 5]))
-(def flow3 (add-node :fn3 fn3 flow2 false [:fn2]))
+(def flow (add-node {} :fn1 fn1 false []))
+(def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
+(def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
+(def new-state (eval-nodes flow3 {} [:fn1 :fn2 :fn3]))
