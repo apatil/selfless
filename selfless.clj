@@ -54,31 +54,25 @@
 (defn update [flow key state]
     "Updates the state with the value corresponding to key,
     and any ancestral values necessary to compute it."
-    (let [;lala (print "call\n")
-            node (flow key)
+    (if (state key) (state key)
+        (let [node (flow key)
             parents (node-parents node)
-            ;qqq (print "\tkey " key "\n")  
-            ;qqq (print "\tparents " parents "\n")            
             pval-map (parent-vals parents state)
-            ;qqq (print "\tpval-map " pval-map "\n")            
+            ; Reduce-fn reduces over the parent value map, updating the curent state as it goes.
             reduce-fn (fn [s kv]
                 (let [key (kv 0) val (kv 1)]
-                    ;lala (print "\tkv " kv  "\n")
-                    ;lala (print "\tkey " key "\n")
-                    ;lala (print "\tval " val "\n")] 
                     (if val s (update flow key s))))
             new-state (if (> (count parents) 0) (reduce reduce-fn state pval-map) state)
-            ;qqq (print "\tnew-state " new-state "\n")   
             new-val (compute node (parent-vals parents new-state))]
-            ;qqq (print "\tnew-val " new-val "\n")]
-        (assoc new-state key new-val)))
+        (assoc new-state key new-val))))
     
 (defn evaluate [flow state labels]
     "Evaluates the flow's state at given labels. Propagates
     message of recomputation to parents. Lazy by default; if
     value of any label is not nil, it is left alone. If 
     eager, values are recomputed."
-    (reduce #(  ) state labels))
+    (let [new-state (reduce (fn [state key] (update flow key state)) state labels)]
+        [(map new-state labels) new-state]))
 
 ;(defn concurrent-eval-state [flow state labels]
 ;    "Like eval-state, but updates are done concurrently when
