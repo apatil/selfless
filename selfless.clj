@@ -29,7 +29,9 @@
                 (reduce add-child new-flow parents)
                 new-flow))))
                 
-(defn add-root [flow key] (add-node key #() flow true []))
+(defn add-root [flow key] 
+    "Adds a root (parentless) node."
+    (add-node key #() flow true []))
 
 (defn forget-children [flow state key]
     "Notifies the children of a key that it has changed. 
@@ -62,17 +64,12 @@
     "Updates the state with the value corresponding to key,
     and any ancestral values necessary to compute it."
     (let [cur-val (state key)]
-        (if cur-val cur-val
+        (if cur-val state
             (let [node (flow key)
                 parents (node-parents node)
-                n-parents (count parents)
                 pval-map (parent-vals parents state)
-                ; Reduce-fn reduces over the parent value map, updating the curent state as it goes.
-                reduce-fn (if (> n-parents 0) 
-                    (fn [s kv]
-                        (let [key (kv 0) val (kv 1)]
-                            (if val s (eval-node flow key s)))))
-                new-state (if (= n-parents 0) state (reduce reduce-fn state pval-map))
+                check-parent (fn [s kv] (if (kv 1) s (eval-node flow s (kv 0))))
+                new-state (reduce check-parent state pval-map)
                 new-val (compute node (parent-vals parents new-state))]
             (assoc new-state key new-val)))))
     
@@ -81,7 +78,7 @@
     recomputation to parents. Lazy by default; if value of any 
     key is not nil, it is left alone. If eager, values are 
     recomputed."
-    (let [new-state (reduce (fn [state key] (eval-node flow state key)) state keys)]
+    (let [new-state (reduce (partial eval-node flow) state keys)]
         new-state))
         
 ;(defn concurrent-eval-state [flow state keys]
