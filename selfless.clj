@@ -49,16 +49,10 @@
     "Forgets the flow's value at given keys."
     (apply dissoc (reduce (partial forget-children flow) state keys) keys))
 
-(defn parent-vals [parents state]
-    "Accumulates the node's parents' values. Returns a map.
-    The map may have nil's."
-    (let [vals (map state parents)]
-        (zipmap parents vals)))
-
-(defn compute [node parent-vals]
+(defn compute [node state]
     "Utility function for computing flow's state at key.
     Should only be called when all parents are ready."
-    ((node-fn node) parent-vals))
+    ((node-fn node) state))
 
 (defn eval-node [flow state key]
     "Updates the state with the value corresponding to key,
@@ -66,11 +60,8 @@
     (let [cur-val (state key)]
         (if cur-val state
             (let [node (flow key)
-                parents (node-parents node)
-                pval-map (parent-vals parents state)
-                check-parent (fn [s kv] (if (kv 1) s (eval-node flow s (kv 0))))
-                new-state (reduce check-parent state pval-map)
-                new-val (compute node (parent-vals parents new-state))]
+                new-state (reduce (partial eval-node flow) state (node-parents node))
+                new-val (compute node new-state)]
             (assoc new-state key new-val)))))
     
 (defn eval-nodes [flow state keys]
