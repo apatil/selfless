@@ -25,7 +25,7 @@
             ; A function adding key to the children list of a parent.
             add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
-            (if parents
+            (if (and parents (not block?))
                 (reduce add-child new-flow parents)
                 new-flow))))
                 
@@ -43,6 +43,10 @@
     to their children."
     (let [tree (child-tree flow state key)]
         (reduce dissoc state tree)))
+        
+(defn notify-reduce [flow fun] 
+    "Utility fn for reducing"
+    (fn [state key] (fun flow key state)))
 
 (defn change [flow state new-substate]
     "Sets the flow's value at certain keys to new values.
