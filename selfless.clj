@@ -31,27 +31,21 @@
                 
 (defn add-root [flow key] (add-node key #() flow true []))
 
-(defn child-tree [flow state key]
-    (tree-seq state #(node-children (flow %)) key))
-    
-(defn parent-tree [flow state key]
-    (tree-seq (comp not state) #(node-parents (flow %)) key))
-
-(defn notify-children [flow key state]
+(defn forget-children [flow state key]
     "Notifies the children of a key that it has changed. 
     Sets their values to nil, and propagates the 'message' 
     to their children."
-    (let [tree (child-tree flow state key)]
-        (reduce dissoc state tree)))
-        
-(defn notify-reduce [flow fun] 
-    "Utility fn for reducing"
-    (fn [state key] (fun flow key state)))
+    (let [children (node-children (flow key))]
+        (apply dissoc (reduce (partial forget-children flow) state children) children)))
 
 (defn change [flow state new-substate]
     "Sets the flow's value at certain keys to new values.
-    Notifies children of change."
-    (merge (reduce (notify-reduce flow notify-children) state (keys new-substate)) new-substate))
+    Forgets children's values."
+    (merge (reduce (partial forget-children flow) state (keys new-substate)) new-substate))
+    
+(defn forget [flow state keys]
+    "Forgets the flow's value at given keys."
+    (apply dissoc (reduce (partial forget-children flow) state keys) keys))
 
 (defn parent-vals [parents state]
     "Accumulates the node's parents' values. Returns a map.
