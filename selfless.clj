@@ -31,7 +31,7 @@
                 
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
-    (add-node key #() flow true []))
+    (add-node flow key (fn []) true))
 
 (defn forget-children [flow state key]
     "Notifies the children of a key that it has changed. 
@@ -69,10 +69,12 @@
 ;    "Like eval-state, but updates are done concurrently when
 ;    possible.")
         
-(def fn1 (fn [] 3))       
 (defn fn2 [a b c d e] [a b c d e])     
 (defn fn3 [fn2] (apply + fn2))
-(def flow (add-node {} :fn1 fn1 false []))
+
+(def flow (add-root {} :fn1))
 (def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
 (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
-(def new-state (eval-nodes flow3 {} [:fn1 :fn2 :fn3]))
+
+(def init-state (change flow3 {} {:fn1 3}))
+(def new-state (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
