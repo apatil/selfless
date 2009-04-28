@@ -57,12 +57,10 @@
 (defn eval-node [flow state key]
     "Updates the state with the value corresponding to key,
     and any ancestral values necessary to compute it."
-    (let [cur-val (state key)]
-        (if cur-val state
-            (let [node (flow key)
-                new-state (reduce (partial eval-node flow) state (node-parents node))
-                new-val (compute node new-state)]
-            (assoc new-state key new-val)))))
+    (if (state key) state
+        (let [node (flow key)
+            new-state (reduce (partial eval-node flow) state (node-parents node))]
+        (assoc new-state key (compute node new-state)))))
     
 (defn eval-nodes [flow state keys]
     "Evaluates the state at given keys. Propagates message of 
