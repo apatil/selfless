@@ -49,18 +49,13 @@
     "Forgets the flow's value at given keys."
     (apply dissoc (reduce (partial forget-children flow) state keys) keys))
 
-(defn compute [node state]
-    "Utility function for computing flow's state at key.
-    Should only be called when all parents are ready."
-    ((node-fn node) state))
-
 (defn eval-node [flow state key]
     "Updates the state with the value corresponding to key,
     and any ancestral values necessary to compute it."
     (if (state key) state
         (let [node (flow key)
             new-state (reduce (partial eval-node flow) state (node-parents node))]
-        (assoc new-state key (compute node new-state)))))
+        (assoc new-state key ((node-fn node) new-state)))))
     
 (defn eval-nodes [flow state keys]
     "Evaluates the state at given keys. Propagates message of 
