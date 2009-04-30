@@ -70,11 +70,6 @@
             recomputed."
             (reduce eval-node state keys))    
         ] {:eval-nodes eval-nodes :forget forget :change change}))
-
-(defmacro ddef [sym obj]
-    (let [new-obj (+ 1 obj)
-        lala (print new-obj)]
-        `(def ~sym ~new-obj)))
         
 (defmacro def-flosures [sym flow]
     "Defunes a structmap with given symbol, and defines accessors 
