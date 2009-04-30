@@ -33,6 +33,9 @@
     "Adds a root (parentless) node."
     (add-node flow key (fn []) true))
 
+(defn flonad [flow]
+    )
+
 (defn forget-children [flow state key]
     "Notifies the children of a key that it has changed. 
     Sets their values to nil, and propagates the 'message' 

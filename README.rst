@@ -1,6 +1,9 @@
 selfless : Stateless, lazy dataflow for Clojure
 ===============================================
 
+Monadic branch
+==============
+
 Separates the dataflow model and the state, so many states can be updated concurrently.
 
 Usage
