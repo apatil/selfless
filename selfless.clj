@@ -84,15 +84,13 @@
         name-fn #(.concat sym-dash (name %))]
     (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
     
-(defmacro with-flow [flow & exprs] 
+(defmacro with-flow [flow bindings & exprs] 
     `(let [~'update ((meta ~flow) :update)
             ~'forget ((meta ~flow) :forget)
             ~'change ((meta ~flow) :change)]
-            ~@exprs))
+            (let ~bindings ~@exprs)))
+
         
-;(defn concurrent-eval-state [flow state keys]
-;    "Like eval-state, but updates are done concurrently when
-;    possible.")
         
 (defn fn2 [a b c d e] [a b c d e])     
 (defn fn3 [fn2] (apply + fn2))
@@ -107,5 +105,7 @@
 (def new-state (flow3-update init-state :fn3 :fn1 :fn2))
 
 (with-flow flow3
-    (def init-state (change {} {:fn1 3}))
-    (def new-state (update init-state :fn3 :fn1 :fn2)))
+    [init-state (change {} {:fn1 3})
+    new-state (update init-state :fn3 :fn1 :fn2)
+    spotty-state (forget new-state :fn3)]
+    [new-state spotty-state])
