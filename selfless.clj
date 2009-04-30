@@ -71,10 +71,10 @@
             (reduce eval-node state keys))    
         ] {:eval-nodes eval-nodes :forget forget :change change}))
         
-(defmacro def-flosures [sym flow]
+(defmacro def-flosures [flow]
     "Defunes a structmap with given symbol, and defines accessors 
     for all its fields."
-    (let [sym-dash (.concat (name sym) "-")
+    (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))]
     (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (flosures (eval flow)))))
         
@@ -89,7 +89,7 @@
 (def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
 (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
 
-(def-flosures fl3 flow3)
+(def-flosures flow3)
 
-(def init-state (fl3-change {} {:fn1 3}))
-(def new-state (fl3-eval-nodes init-state :fn3 :fn1 :fn2))
+(def init-state (flow3-change {} {:fn1 3}))
+(def new-state (flow3-eval-nodes init-state :fn3 :fn1 :fn2))
