@@ -18,8 +18,12 @@ First, build a dataflow::
 The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and ``block?`` slots. Blocking nodes do not 'listen' to their parents. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
 
 Having created the dataflow, you can create functions ``flow3-eval``, ``flow3-forget`` and ``flow3-change`` with::
-
+    
     (def-flosures flow3)
+    
+or if you don't want to bind the functions to vars you can create them in a map keyed by ``:eval``, ``:forget`` and ``:change`` with::
+
+    (flosures flow3)
 
 Then, seed & evaluate as many states as you want::
 
