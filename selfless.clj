@@ -54,8 +54,9 @@
     and any ancestral values necessary to compute it."
     (if (state key) state
         (let [node (flow key)
-            new-state (reduce (partial eval-node flow) state (node-parents node))]
-        (assoc new-state key ((node-fn node) new-state)))))
+            parents (node-parents node)
+            new-state (reduce (partial eval-node flow) state parents)]
+        (assoc new-state key ((node-fn node) (select-keys new-state parents))))))
     
 (defn eval-nodes [flow state keys]
     "Evaluates the state at given keys. Propagates message of 
