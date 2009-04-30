@@ -1,8 +1,3 @@
-; Author: Anand Patil
-; Date: Feb 5, 2009
-; Creative Commons BY-SA, see LICENSE
-; copyright 2009 Anand Patil
-
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
     for all its fields."
@@ -60,16 +55,15 @@
     (if (state key) state
         (let [node (flow key)
             parents (node-parents node)
-            new-state (reduce (partial eval-node flow) state parents)]
-        (assoc new-state key ((node-fn node) (select-keys new-state parents))))))
+            new-state (reduce (partial eval-node flow) state (node-parents node))]
+        (assoc new-state key ((node-fn node) new-state)))))
     
-(defn eval-nodes [flow state keys]
+(defn eval-nodes [flow state & keys]
     "Evaluates the state at given keys. Propagates message of 
     recomputation to parents. Lazy by default; if value of any 
     key is not nil, it is left alone. If eager, values are 
     recomputed."
-    (let [new-state (reduce (partial eval-node flow) state keys)]
-        new-state))
+    (reduce (partial eval-node flow) state keys))
         
 ;(defn concurrent-eval-state [flow state keys]
 ;    "Like eval-state, but updates are done concurrently when
@@ -83,4 +77,4 @@
 (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
 
 (def init-state (change flow3 {} {:fn1 3}))
-(def new-state (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
+(def new-state (eval-nodes flow3 init-state :fn3 :fn1 :fn2))
