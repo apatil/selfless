@@ -1,3 +1,8 @@
+; Author: Anand Patil
+; Date: Feb 5, 2009
+; Creative Commons BY-SA, see LICENSE
+; copyright 2009 Anand Patil
+
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
     for all its fields."
