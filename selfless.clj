@@ -32,38 +32,56 @@
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
     (add-node flow key (fn []) true))
-
-(defn forget-children [flow state key]
-    "Notifies the children of a key that it has changed. 
-    Sets their values to nil, and propagates the 'message' 
-    to their children."
-    (let [children (node-children (flow key))]
-        (apply dissoc (reduce (partial forget-children flow) state children) children)))
-
-(defn change [flow state new-substate]
-    "Sets the flow's value at certain keys to new values.
-    Forgets children's values."
-    (merge (reduce (partial forget-children flow) state (keys new-substate)) new-substate))
     
-(defn forget [flow state keys]
-    "Forgets the flow's value at given keys."
-    (apply dissoc (reduce (partial forget-children flow) state keys) keys))
+(defn flosures [flow]
+    "Produces fns for operating on the state of the given flow."
 
-(defn eval-node [flow state key]
-    "Updates the state with the value corresponding to key,
-    and any ancestral values necessary to compute it."
-    (if (state key) state
+    (letfn [
+        (forget-children [state key]
+        "Notifies the children of a key that it has changed. 
+        Sets their values to nil, and propagates the 'message' 
+        to their children."
         (let [node (flow key)
-            parents (node-parents node)
-            new-state (reduce (partial eval-node flow) state (node-parents node))]
-        (assoc new-state key ((node-fn node) new-state)))))
+            children (if node (node-children node) [])]
+            (apply dissoc (reduce forget-children state children) children)))
+
+        (change [state new-substate]
+            "Sets the flow's value at certain keys to new values.
+            Forgets children's values."
+            (merge (reduce forget-children state (keys new-substate)) new-substate))
+
+        (forget [state & keys]
+            "Forgets the flow's value at given keys."
+            (apply dissoc (reduce forget-children state keys) keys))
     
-(defn eval-nodes [flow state & keys]
-    "Evaluates the state at given keys. Propagates message of 
-    recomputation to parents. Lazy by default; if value of any 
-    key is not nil, it is left alone. If eager, values are 
-    recomputed."
-    (reduce (partial eval-node flow) state keys))
+        (eval-node [state key]
+            "Updates the state with the value corresponding to key,
+            and any ancestral values necessary to compute it."
+            (if (state key) state
+                (let [node (flow key)
+                    parents (node-parents node)
+                    new-state (reduce eval-node state (node-parents node))]
+                (assoc new-state key ((node-fn node) new-state)))))        
+        
+        (eval-nodes [state & keys]
+            "Evaluates the state at given keys. Propagates message of 
+            recomputation to parents. Lazy by default; if value of any 
+            key is not nil, it is left alone. If eager, values are 
+            recomputed."
+            (reduce eval-node state keys))    
+        ] {:eval-nodes eval-nodes :forget forget :change change}))
+
+(defmacro ddef [sym obj]
+    (let [new-obj (+ 1 obj)
+        lala (print new-obj)]
+        `(def ~sym ~new-obj)))
+        
+(defmacro def-flosures [sym flow]
+    "Defunes a structmap with given symbol, and defines accessors 
+    for all its fields."
+    (let [sym-dash (.concat (name sym) "-")
+        name-fn #(.concat sym-dash (name %))]
+    (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (flosures (eval flow)))))
         
 ;(defn concurrent-eval-state [flow state keys]
 ;    "Like eval-state, but updates are done concurrently when
@@ -76,5 +94,7 @@
 (def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
 (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
 
-(def init-state (change flow3 {} {:fn1 3}))
-(def new-state (eval-nodes flow3 init-state :fn3 :fn1 :fn2))
+(def-flosures fl3 flow3)
+
+(def init-state (fl3-change {} {:fn1 3}))
+(def new-state (fl3-eval-nodes init-state :fn3 :fn1 :fn2))
