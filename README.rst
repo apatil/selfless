@@ -39,7 +39,7 @@ You can also start a new state by altering an existing one::
     
 or by just pruning an existing one::
     
-    (def other-state (flow3-forget new-state :fn1))
+    (def other-state (flow3-forget new-state :fn2 :fn3))
     
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     
