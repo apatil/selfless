@@ -1,3 +1,5 @@
+(use 'clojure.contrib.monads)
+
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
     for all its fields."
@@ -76,7 +78,7 @@
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
     (add-node flow key (fn []) true))
-        
+    
 (defmacro def-flosures [flow]
     "Defines a structmap with given symbol, and defines accessors 
     for all its fields."
@@ -92,22 +94,47 @@
             ~'change ((meta ~flow) :change)]
             (let ~bindings ~@exprs)))
 
+(defn pair-to-node [fl [sym body]]
+    "Helper function for flow."
+    (let [key (keyword (name sym))]        
+        (if (empty? body)
+            (add-root fl key)
+        (let [f (eval (first body))
+            args (rest body)
+            block? (some #(= % :block) args)
+            args (filter #(not (= % :block)) args)
+            ex-keys (keys fl)
+            args (replace (zipmap (map (comp symbol name) ex-keys) ex-keys) args)
+            lala (print args "\n")] 
+            (add-node fl key f block? args)))))
+
+(defmacro flow [bindings]
+    "Creates a flow with syntax similar to let-bindings."
+    (let [pairs (partition 2 bindings)]
+        (reduce pair-to-node {} pairs)))
+
+(defmacro def-flow [sym bindings]
+    "Creates a flow and binds it to a symbol. See also 'flow'."
+    `(def ~sym (flow ~bindings)))
+
+
+; ========
+; = Test =
+; ========
         
-        
-(defn fn2 [a b c d e] [a b c d e])     
-(defn fn3 [fn2] (apply + fn2))
+(defn fn2 [a b c d e] [a b c d e])
+(defn fn3 [y] (apply + y))
 
-(def flow (add-root {} :fn1))
-(def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
-(def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
-
-(def-flosures flow3)
-
-(def init-state (flow3-change {} {:fn1 3}))
-(def new-state (flow3-update init-state :fn3 :fn1 :fn2))
+(def-flow flow3 
+    [x ()
+    y (fn2 x 17 x 2 5 :block)
+    z (fn3 y)])
 
 (with-flow flow3
-    [init-state (change {} {:fn1 3})
-    new-state (update init-state :fn3 :fn1 :fn2)
-    spotty-state (forget new-state :fn3)]
-    [new-state spotty-state])
+    [init-state (change {} {:x 3})
+    new-state (update init-state :z :x :y)
+    spotty-state (forget new-state :z)
+    newer-state (change new-state {:x 11})
+    newerer-state (update newer-state :y)]
+    
+    [new-state spotty-state newer-state newerer-state])
