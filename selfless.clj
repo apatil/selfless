@@ -50,7 +50,7 @@
             (reduce update-node state keys))    
         ] {:update update-nodes :forget forget :change change}))
 
-(defn update-flow-meta [flow]
+(defn- update-flow-meta [flow]
     "Called automatically when flow is changed using add-node etc.
     Appends closure functions useful for altering states to flow."
     (with-meta flow (flosures flow)))
@@ -94,18 +94,19 @@
             ~'change ((meta ~flow) :change)]
             (let ~bindings ~@exprs)))
 
-(defn pair-to-node [fl [sym body]]
+(defn- pair-to-node [fl [sym body]]
     "Helper function for flow."
     (let [key (keyword (name sym))]        
         (if (empty? body)
             (add-root fl key)
         (let [f (eval (first body))
             args (rest body)
-            block? (some #(= % :block) args)
-            args (filter #(not (= % :block)) args)
-            ex-keys (keys fl)
-            args (replace (zipmap (map (comp symbol name) ex-keys) ex-keys) args)
-            lala (print args "\n")] 
+            is-block #(= % :block)
+            block? (some is-block args)
+            args (filter (comp not is-block) args)
+            keys (keys fl)
+            symbs (map (comp symbol name) keys)
+            args (replace (zipmap symbs keys) args)] 
             (add-node fl key f block? args)))))
 
 (defmacro flow [bindings]
@@ -124,17 +125,24 @@
         
 (defn fn2 [a b c d e] [a b c d e])
 (defn fn3 [y] (apply + y))
+(defn fn4 [x y] (+ x y))
 
+; Create a flow
 (def-flow flow3 
     [x ()
     y (fn2 x 17 x 2 5 :block)
-    z (fn3 y)])
+    z (fn3 y)
+    w (fn4 x z)])
 
+; Create some states
 (with-flow flow3
     [init-state (change {} {:x 3})
-    new-state (update init-state :z :x :y)
+    new-state (update init-state :z :x :y :w)
     spotty-state (forget new-state :z)
-    newer-state (change new-state {:x 11})
-    newerer-state (update newer-state :y)]
     
-    [new-state spotty-state newer-state newerer-state])
+    newer-state (change {} {:x 11})
+    newerer-state (update newer-state :y :w)
+    
+    blocked-change-state (change new-state {:x 11})]
+    
+    [new-state spotty-state newer-state newerer-state blocked-change-state])
