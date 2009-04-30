@@ -78,13 +78,15 @@
     (add-node flow key (fn []) true))
         
 (defmacro def-flosures [flow]
-    "Defunes a structmap with given symbol, and defines accessors 
+    "Defines a structmap with given symbol, and defines accessors 
     for all its fields."
     (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))]
     (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
     
 (defmacro with-flow [flow bindings & exprs] 
+    "Like let-bindings, but provides update, forget and change
+    functions in context of flow."
     `(let [~'update ((meta ~flow) :update)
             ~'forget ((meta ~flow) :forget)
             ~'change ((meta ~flow) :change)]
