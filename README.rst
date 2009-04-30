@@ -7,6 +7,7 @@ Usage
 -----
 
 First, build a dataflow::
+
     (defn fn2 [a b c d e] [a b c d e])     
     (defn fn3 [fn2] (apply + fn2))
  
@@ -19,6 +20,7 @@ The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The result
 ``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
 
 Then, seed & evaluate as many states as you want::
+
     (def init-state (change flow3 {} {:fn1 3}))
     (def new-state (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
     
