@@ -17,21 +17,26 @@ First, build a dataflow::
 
 The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and ``block?`` slots. Blocking nodes do not 'listen' to their parents. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
 
-Having created the dataflow, you can create functions ``flow3-eval``, ``flow3-forget`` and ``flow3-change`` with::
+Having created the dataflow, you can create functions ``flow3-update``, ``flow3-forget`` and ``flow3-change`` with::
     
     (def-flosures flow3)
     
-or if you don't want to bind the functions to vars you can create them in a map keyed by ``:eval``, ``:forget`` and ``:change`` with::
+or if you don't want to bind the functions to vars you can create them in a map keyed by ``:update``, ``:forget`` and ``:change`` with::
 
     (flosures flow3)
+    
+Or you can use the with-flow macro, within which the functions ``update``, ``forget`` and ``change`` are understood to pertain to the given flow::
 
-Then, seed & evaluate as many states as you want::
+    (with-flow flow3
+        exprs...)
+
+Then, seed & updateuate as many states as you want::
 
     (def init-state (flow3-change {} {:fn1 3}))
-    (def new-state (flow3-eval init-state :fn3 :fn1 :fn2))    
+    (def new-state (flow3-update init-state :fn3 :fn1 :fn2))    
 
     (def init-state (flow3-change {} {:fn1 17}))
-    (def new-state (flow3-eval init-state :fn3 :fn1 :fn2))    
+    (def new-state (flow3-update init-state :fn3 :fn1 :fn2))    
 
 You can also start a new state by altering an existing one::
 
