@@ -27,6 +27,14 @@ Then, seed & evaluate as many states as you want::
     (def init-state2 (change flow3 {} {:fn1 17}))
     (def new-state2 (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
     
+You can also start a new state by altering an existing one::
+
+    (def newer-state (change flow3 new-state {:fn1 1}))
+    
+or by just pruning an existing one::
+    
+    (def other-state (forget flow3 new-state [:fn1]))
+    
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     
 License
