@@ -10,29 +10,6 @@
                 
 (structmap-and-accessors node :fn :parents :children :block?)
 
-(defn add-node [flow key fun block? & [args]]
-    "Adds fun as a node to the dataflow flow, with key 'key'. 
-    Labels must be unique within dataflows."
-    (if (flow key) 
-        (throw (Exception. (.concat "Node key already taken: " (name key))))
-        (let [
-            ; Parents are nodes in the flow
-            parents (set (filter (fn [key] (flow key)) args))   
-            ; A partially-applied version of the function that takes nodes only
-            pfun #(apply fun (replace % args))                  
-            ; The flow, with the new function added
-            new-flow (assoc flow key (struct node pfun parents #{} block?))
-            ; A function adding key to the children list of a parent.
-            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
-            ; Notify parents of new child
-            (if (and parents (not block?))
-                (reduce add-child new-flow parents)
-                new-flow))))
-                
-(defn add-root [flow key] 
-    "Adds a root (parentless) node."
-    (add-node flow key (fn []) true))
-    
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
 
@@ -54,29 +31,64 @@
             "Forgets the flow's value at given keys."
             (apply dissoc (reduce forget-children state keys) keys))
     
-        (eval-node [state key]
+        (update-node [state key]
             "Updates the state with the value corresponding to key,
             and any ancestral values necessary to compute it."
             (if (state key) state
                 (let [node (flow key)
                     parents (node-parents node)
-                    new-state (reduce eval-node state (node-parents node))]
+                    new-state (reduce update-node state (node-parents node))]
                 (assoc new-state key ((node-fn node) new-state)))))        
         
-        (eval-nodes [state & keys]
+        (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
             recomputation to parents. Lazy by default; if value of any 
             key is not nil, it is left alone. If eager, values are 
             recomputed."
-            (reduce eval-node state keys))    
-        ] {:eval eval-nodes :forget forget :change change}))
+            (reduce update-node state keys))    
+        ] {:update update-nodes :forget forget :change change}))
+
+(defn update-flow-meta [flow]
+    "Called automatically when flow is changed using add-node etc.
+    Appends closure functions useful for altering states to flow."
+    (with-meta flow (flosures flow)))
+
+(defn add-node [flow key fun block? & [args]]
+    "Adds fun as a node to the dataflow flow, with key 'key'. 
+    Labels must be unique within dataflows."
+    (if (flow key) 
+        (throw (Exception. (.concat "Node key already taken: " (name key))))
+        (let [
+            ; Parents are nodes in the flow
+            parents (set (filter (fn [key] (flow key)) args))   
+            ; A partially-applied version of the function that takes nodes only
+            pfun #(apply fun (replace % args))                  
+            ; The flow, with the new function added
+            new-flow (assoc flow key (struct node pfun parents #{} block?))
+            ; A function adding key to the children list of a parent.
+            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
+            ; Notify parents of new child
+            (update-flow-meta
+                (if (and parents (not block?))
+                    (reduce add-child new-flow parents)
+                    new-flow)))))
+                
+(defn add-root [flow key] 
+    "Adds a root (parentless) node."
+    (add-node flow key (fn []) true))
         
 (defmacro def-flosures [flow]
     "Defunes a structmap with given symbol, and defines accessors 
     for all its fields."
     (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))]
-    (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (flosures (eval flow)))))
+    (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
+    
+(defmacro with-flow [flow & exprs] 
+    `(let [~'update ((meta ~flow) :update)
+            ~'forget ((meta ~flow) :forget)
+            ~'change ((meta ~flow) :change)]
+            ~@exprs))
         
 ;(defn concurrent-eval-state [flow state keys]
 ;    "Like eval-state, but updates are done concurrently when
@@ -92,4 +104,8 @@
 (def-flosures flow3)
 
 (def init-state (flow3-change {} {:fn1 3}))
-(def new-state (flow3-eval init-state :fn3 :fn1 :fn2))
+(def new-state (flow3-update init-state :fn3 :fn1 :fn2))
+
+(with-flow flow3
+    (def init-state (change {} {:fn1 3}))
+    (def new-state (update init-state :fn3 :fn1 :fn2)))
