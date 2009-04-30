@@ -27,4 +27,7 @@ Then, seed & evaluate as many states as you want::
     
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     
-    
+License
+-------
+
+Copyright (c) Anand Patil, 2009. Licensed under Creative Commons BY-SA, see LICENSE.
