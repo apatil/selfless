@@ -15,25 +15,27 @@ First, build a dataflow::
     (def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
     (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
 
-The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and ``block?`` slots. Blocking nodes do not 'listen' to their parents.
+The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and ``block?`` slots. Blocking nodes do not 'listen' to their parents. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
 
-``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
+Having created the dataflow, you can create functions ``flow3-eval``, ``flow3-forget`` and ``flow3-change`` with::
+
+    (def-flosures flow3)
 
 Then, seed & evaluate as many states as you want::
 
-    (def init-state (change flow3 {} {:fn1 3}))
-    (def new-state (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
-    
-    (def init-state2 (change flow3 {} {:fn1 17}))
-    (def new-state2 (eval-nodes flow3 init-state [:fn3 :fn1 :fn2]))
-    
+    (def init-state (flow3-change {} {:fn1 3}))
+    (def new-state (flow3-eval init-state :fn3 :fn1 :fn2))    
+
+    (def init-state (flow3-change {} {:fn1 17}))
+    (def new-state (flow3-eval init-state :fn3 :fn1 :fn2))    
+
 You can also start a new state by altering an existing one::
 
-    (def newer-state (change flow3 new-state {:fn1 1}))
+    (def newer-state (flow3-change new-state {:fn1 1}))
     
 or by just pruning an existing one::
     
-    (def other-state (forget flow3 new-state [:fn1]))
+    (def other-state (flow3-forget new-state :fn1))
     
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     

@@ -69,7 +69,7 @@
             key is not nil, it is left alone. If eager, values are 
             recomputed."
             (reduce eval-node state keys))    
-        ] {:eval-nodes eval-nodes :forget forget :change change}))
+        ] {:eval eval-nodes :forget forget :change change}))
         
 (defmacro def-flosures [flow]
     "Defunes a structmap with given symbol, and defines accessors 
@@ -92,4 +92,4 @@
 (def-flosures flow3)
 
 (def init-state (flow3-change {} {:fn1 3}))
-(def new-state (flow3-eval-nodes init-state :fn3 :fn1 :fn2))
+(def new-state (flow3-eval init-state :fn3 :fn1 :fn2))
