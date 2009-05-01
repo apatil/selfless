@@ -1,4 +1,5 @@
 (use 'clojure.contrib.monads)
+(ns selfless)
 
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
@@ -109,40 +110,11 @@
             args (replace (zipmap symbs keys) args)] 
             (add-node fl key f block? args)))))
 
-(defmacro flow [bindings]
+(defmacro flow [bindings init-flow]
     "Creates a flow with syntax similar to let-bindings."
     (let [pairs (partition 2 bindings)]
-        (reduce pair-to-node {} pairs)))
+        (reduce pair-to-node init-flow pairs)))
 
-(defmacro def-flow [sym bindings]
+(defmacro def-flow [sym bindings init-flow]
     "Creates a flow and binds it to a symbol. See also 'flow'."
-    `(def ~sym (flow ~bindings)))
-
-
-; ========
-; = Test =
-; ========
-        
-(defn fn2 [a b c d e] [a b c d e])
-(defn fn3 [y] (apply + y))
-(defn fn4 [x y] (+ x y))
-
-; Create a flow
-(def-flow flow3 
-    [x ()
-    y (fn2 x 17 x 2 5 :block)
-    z (fn3 y)
-    w (fn4 x z)])
-
-; Create some states
-(with-flow flow3
-    [init-state (change {} {:x 3})
-    new-state (update init-state :z :x :y :w)
-    spotty-state (forget new-state :z)
-    
-    newer-state (change {} {:x 11})
-    newerer-state (update newer-state :y :w)
-    
-    blocked-change-state (change new-state {:x 11})]
-    
-    [new-state spotty-state newer-state newerer-state blocked-change-state])
+    `(def ~sym (flow ~bindings ~init-flow)))
