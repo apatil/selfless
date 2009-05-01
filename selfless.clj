@@ -110,11 +110,11 @@
             args (replace (zipmap symbs keys) args)] 
             (add-node fl key f block? args)))))
 
-(defmacro flow [bindings init-flow]
+(defmacro flow [init-flow bindings]
     "Creates a flow with syntax similar to let-bindings."
     (let [pairs (partition 2 bindings)]
         (reduce pair-to-node init-flow pairs)))
 
-(defmacro def-flow [sym bindings init-flow]
+(defmacro def-flow [sym init-flow bindings]
     "Creates a flow and binds it to a symbol. See also 'flow'."
-    `(def ~sym (flow ~bindings ~init-flow)))
+    `(def ~sym (flow ~init-flow ~bindings)))
