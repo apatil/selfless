@@ -1,4 +1,3 @@
-(use 'clojure.contrib.monads)
 (ns selfless)
 
 (defmacro structmap-and-accessors [sym & fields]
@@ -95,26 +94,26 @@
             ~'change ((meta ~flow) :change)]
             (let ~bindings ~@exprs)))
 
-(defn- pair-to-node [fl [sym body]]
-    "Helper function for flow."
-    (let [key (keyword (name sym))]        
-        (if (empty? body)
-            (add-root fl key)
-        (let [f (eval (first body))
-            args (rest body)
-            is-block #(= % :block)
-            block? (some is-block args)
-            args (filter (comp not is-block) args)
-            keys (keys fl)
-            symbs (map (comp symbol name) keys)
-            args (replace (zipmap symbs keys) args)] 
-            (add-node fl key f block? args)))))
-
-(defmacro flow [init-flow bindings]
-    "Creates a flow with syntax similar to let-bindings."
-    (let [pairs (partition 2 bindings)]
-        (reduce pair-to-node init-flow pairs)))
-
-(defmacro def-flow [sym init-flow bindings]
-    "Creates a flow and binds it to a symbol. See also 'flow'."
-    `(def ~sym (flow ~init-flow ~bindings)))
+;(defn- pair-to-node [fl [sym body]]
+;    "Helper function for flow."
+;    (let [key (keyword (name sym))]        
+;        (if (empty? body)
+;            (add-root fl key)
+;        (let [f (eval (first body))
+;            args (rest body)
+;            is-block #(= % :block)
+;            block? (some is-block args)
+;            args (filter (comp not is-block) args)
+;            keys (keys fl)
+;            symbs (map (comp symbol name) keys)
+;            args (replace (zipmap symbs keys) args)] 
+;            (add-node fl key f block? args)))))
+;
+;(defmacro flow [init-flow bindings]
+;    "Creates a flow with syntax similar to let-bindings."
+;    (let [pairs (partition 2 bindings)]
+;        (reduce pair-to-node init-flow pairs)))
+;
+;(defmacro def-flow [sym init-flow bindings]
+;    "Creates a flow and binds it to a symbol. See also 'flow'."
+;    `(def ~sym (flow ~(eval init-flow) ~bindings)))
