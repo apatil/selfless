@@ -12,7 +12,7 @@
 ; Create a flow
 (def-flow flow3 {}
     [x ()
-    y (fn2 x 17 x 2 5 :block)
+    y (fn2 x 17 x 2 5)
     z (fn3 y)
     w (fn4 x z)])
 

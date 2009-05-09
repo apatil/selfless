@@ -1,5 +1,5 @@
 (ns selfless)
-(refer 'clojure.contrib.graph)
+(use 'clojure.contrib.graph)
 
 ; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
 ; if possible. Propagate value message to children if value changed, otherwise do
@@ -19,10 +19,6 @@
                 `(def ~s (accessor ~sym ~field))))))))
                 
 (structmap-and-accessors node :fn :parents :children :block?)
-
-(defn flow-graph [flow]
-    "Returns a clojure-contrib graph corresponding to the given flow."
-    (struct directed-graph (keys flow) #(node-children (flow %))))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
@@ -62,7 +58,7 @@
             (reduce update-node state keys))    
         ] {:update update-nodes :forget forget :change change}))
 
-(defn- update-flow-meta [flow]
+(defn update-flow-meta [flow]
     "Called automatically when flow is changed using add-node etc.
     Appends closure functions useful for altering states to flow."
     (with-meta flow (flosures flow)))
@@ -128,3 +124,7 @@
 (defmacro def-flow [sym init-flow bindings]
     "Creates a flow and binds it to a symbol. See also 'flow'."
     `(def ~sym (flow ~(eval init-flow) ~bindings)))
+    
+(defn flow-graph [flow]
+    "Returns a clojure-contrib graph corresponding to the given flow."
+    (struct directed-graph (keys flow) #(:children (flow %))))
