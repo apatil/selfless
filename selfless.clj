@@ -1,4 +1,12 @@
 (ns selfless)
+(refer 'clojure.contrib.graph)
+
+; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
+; if possible. Propagate value message to children if value changed, otherwise do
+; nothing. Useful for 'index' nodes whose value won't usually change even if parents
+; change.
+
+; TODO: Concurrent updates. Use stripped-down version of lazy-agent.
 
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
@@ -12,17 +20,21 @@
                 
 (structmap-and-accessors node :fn :parents :children :block?)
 
+(defn flow-graph [flow]
+    "Returns a clojure-contrib graph corresponding to the given flow."
+    (struct directed-graph (keys flow) #(node-children (flow %))))
+
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
 
     (letfn [
         (forget-children [state key]
-        "Notifies the children of a key that it has changed. 
-        Sets their values to nil, and propagates the 'message' 
-        to their children."
-        (let [node (flow key)
-            children (if node (node-children node) [])]
-            (apply dissoc (reduce forget-children state children) children)))
+            "Notifies the children of a key that it has changed. 
+            Sets their values to nil, and propagates the 'message' 
+            to their children."
+            (let [node (flow key)
+                children (if node (node-children node) [])]
+                (apply dissoc (reduce forget-children state children) children)))
 
         (change [state new-substate]
             "Sets the flow's value at certain keys to new values.
@@ -80,8 +92,7 @@
     (add-node flow key (fn []) true))
     
 (defmacro def-flosures [flow]
-    "Defines a structmap with given symbol, and defines accessors 
-    for all its fields."
+    "Binds the flow's 'methods' to vars."
     (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))]
     (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
@@ -94,26 +105,26 @@
             ~'change ((meta ~flow) :change)]
             (let ~bindings ~@exprs)))
 
-;(defn- pair-to-node [fl [sym body]]
-;    "Helper function for flow."
-;    (let [key (keyword (name sym))]        
-;        (if (empty? body)
-;            (add-root fl key)
-;        (let [f (eval (first body))
-;            args (rest body)
-;            is-block #(= % :block)
-;            block? (some is-block args)
-;            args (filter (comp not is-block) args)
-;            keys (keys fl)
-;            symbs (map (comp symbol name) keys)
-;            args (replace (zipmap symbs keys) args)] 
-;            (add-node fl key f block? args)))))
-;
-;(defmacro flow [init-flow bindings]
-;    "Creates a flow with syntax similar to let-bindings."
-;    (let [pairs (partition 2 bindings)]
-;        (reduce pair-to-node init-flow pairs)))
-;
-;(defmacro def-flow [sym init-flow bindings]
-;    "Creates a flow and binds it to a symbol. See also 'flow'."
-;    `(def ~sym (flow ~(eval init-flow) ~bindings)))
+(defn- pair-to-node [fl [sym body]]
+    "Helper function for flow."
+    (let [key (keyword (name sym))]        
+        (if (empty? body)
+            (add-root fl key)
+        (let [f (eval (first body))
+            args (rest body)
+            is-block #(= % :block)
+            block? (some is-block args)
+            args (filter (comp not is-block) args)
+            keys (keys fl)
+            symbs (map (comp symbol name) keys)
+            args (replace (zipmap symbs keys) args)] 
+            (add-node fl key f block? args)))))
+
+(defmacro flow [init-flow bindings]
+    "Creates a flow with syntax similar to let-bindings."
+    (let [pairs (partition 2 bindings)]
+        (reduce pair-to-node init-flow pairs)))
+
+(defmacro def-flow [sym init-flow bindings]
+    "Creates a flow and binds it to a symbol. See also 'flow'."
+    `(def ~sym (flow ~(eval init-flow) ~bindings)))
