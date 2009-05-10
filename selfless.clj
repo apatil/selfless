@@ -6,7 +6,14 @@
 ; nothing. Useful for 'index' nodes whose value won't usually change even if parents
 ; change.
 
-; TODO: Concurrent updates. Use stripped-down version of lazy-agent.
+(defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
+
+(defn agent? [x] (instance? clojure.lang.Agent x))
+
+(defn deref-or-val [x] (if (agent? x) @x x))
+
+(defn map-now [fn coll] 
+    (doseq [x coll] (fn x)))
 
 (defmacro structmap-and-accessors [sym & fields]
     "Defunes a structmap with given symbol, and defines accessors 
@@ -22,12 +29,16 @@
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
-
     (letfn [
+        ; ===================================
+        ; = Destroying state after a change =
+        ; ===================================
         (forget-children [state key]
             "Notifies the children of a key that it has changed. 
-            Sets their values to nil, and propagates the 'message' 
-            to their children."
+            If they are not eager, sets their values to nil, and 
+            propagates the 'message' to their children.
+            If they are eager, attempts to recompute their values
+            before taking the above action."
             (let [node (flow key)
                 children (if node (node-children node) [])]
                 (apply dissoc (reduce forget-children state children) children)))
@@ -41,22 +52,94 @@
             "Forgets the flow's value at given keys."
             (apply dissoc (reduce forget-children state keys) keys))
     
+        ; =====================
+        ; = Sequential update =
+        ; =====================
         (update-node [state key]
             "Updates the state with the value corresponding to key,
             and any ancestral values necessary to compute it."
             (if (state key) state
                 (let [node (flow key)
                     parents (node-parents node)
-                    new-state (reduce update-node state (node-parents node))]
+                    new-state (reduce update-node state parets)]
                 (assoc new-state key ((node-fn node) new-state)))))        
         
+        ; ======================
+        ; = Concurrent updates =
+        ; ======================
         (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
-            recomputation to parents. Lazy by default; if value of any 
-            key is not nil, it is left alone. If eager, values are 
-            recomputed."
-            (reduce update-node state keys))    
-        ] {:update update-nodes :forget forget :change change}))
+            recomputation to parents."
+            (reduce update-node state keys))
+        
+        (m-update [parent-vals state key new-pv]
+            "A message that a parent can send to a child when it has 
+            updated."
+            (let [new-vals (merge parent-vals new-pv)
+                    node (flow key)]
+                (if (= (count new-vals) (count (node-parents node))) 
+                    ; If the value can be computed, do it.
+                    (let [new-val ((node-fn node) new-vals)] 
+                        (do
+                            (map-now #(m-update (state %) state % {key new-pv}) (node-children node))
+                            new-val))
+                    ; Otherwise just record the parent's value.
+                    new-vals)))
+            
+        (create-agent [state-and-roots key]
+            "Creates an agent at the given key, which is responsible for 
+            computing the value at that key. Creates agents for parents
+            if necessary."
+            (let [state (state-and-roots 0)
+                    roots (state-and-roots 1)]
+                (if (state key) state
+                    (let [node (flow key)
+                            parents (node-parents node)
+                            parent-vals (select-keys state (filter (comp not agent? state) parents))]
+                        ; Update the state with new agents at this node and at the parent nodes
+                        [(assoc (reduce create-agent state parents) key (agent parent-vals)) 
+                        ; If this is a root node, add it to the roots.
+                        (if (= (count parent-vals) (count parents)) (conj roots key) roots)]))))
+        
+        (create-agents [state keys]
+            "Fills in the state with agents responsible for computing
+            values at the requisite keys."
+            (reduce create-agent [state []] keys))
+        
+        (unlatching-watcher [#^java.util.concurrent.CountDownLatch latch a old-val new-val]
+            "If the new value is not a map, decrements the countdown latch."
+            (do
+                (if (not (map? new-val))
+                    (.countDown latch))
+                    latch))
+        
+        (create-latch [state keys]
+            "Creates a latch that watches the given keys during a concurrent
+            update."
+            (let [agent-keys (filter (comp agent? state) keys)
+                latch (java.util.concurrent.CountDownLatch. (count agent-keys))
+                watcher-adder (fn [a] (add-watch a latch unlatching-watcher))])
+                (do
+                    (map-now watcher-adder (select-keys state agent-keys))
+                    latch))
+        
+        (start-concurrent-update [state roots]
+            "Starts a concurrent update going."
+            (map-now #(m-update (state %) state % {}) roots))
+            
+        (concurrent-update [state & keys]
+            "Does a concurrent update of the given keys."
+            (let [[state roots] (create-agents state keys)
+                    latch (create-latch state keys)]
+                (do
+                    (start-concurrent-update state roots)
+                    (.await latch)
+                    (zipmapmap deref-or-val state))))
+        
+        ] 
+        {:update update-nodes :forget forget :change change :cupdate concurrent-update}))
+        
+
 
 (defn update-flow-meta [flow]
     "Called automatically when flow is changed using add-node etc.
