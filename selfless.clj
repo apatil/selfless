@@ -6,6 +6,12 @@
 ; nothing. Useful for 'index' nodes whose value won't usually change even if parents
 ; change.
 
+;TODO: Handle errors in concurrent update.
+
+;TODO: Return concurrent state as a delay, Need to have a watcher that releases a lock
+;when the latch agent is done. The delay needs to acquire the lock, then deref the latch
+;agent and return its state.
+
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
 (defn agent? [x] (instance? clojure.lang.Agent x))
@@ -30,6 +36,7 @@
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
     (letfn [
+        
         ; ===================================
         ; = Destroying state after a change =
         ; ===================================
@@ -72,19 +79,28 @@
             recomputation to parents."
             (reduce update-node state keys))
         
-        (m-update [parent-vals state key new-pv]
+        (m-update [parent-vals state key new-pv latch-agent]
             "A message that a parent can send to a child when it has 
             updated."
             (let [new-vals (merge parent-vals new-pv)
                     node (flow key)]
                 (if (= (count new-vals) (count (node-parents node))) 
                     ; If the value can be computed, do it.
-                    (let [new-val ((node-fn node) new-vals)] 
+                    (let [new-val ((node-fn node) new-vals)
+                            msg-map {key new-val}] 
                         (do
-                            (map-now #(m-update (state %) state % {key new-pv}) (node-children node))
+                            (map-now #(send m-update (state %) state % msg-map latch-agent) (node-children node))
+                            (send m-record latch-agent msg-map)
                             new-val))
                     ; Otherwise just record the parent's value.
                     new-vals)))
+        
+        (m-record [[state keys-remaining] new-vals]
+            "A message agents send to the latch agent when they update.
+            Its value consists of a [state keys-remaining] couple. When
+            keys-remaining is zero, the requested update has been made."
+            (let [new-state (merge state new-val)
+                new-keys (apply (partial disj keys-remaining) (keys new-vals))]))
             
         (create-agent [state-and-roots key]
             "Creates an agent at the given key, which is responsible for 
@@ -106,35 +122,18 @@
             values at the requisite keys."
             (reduce create-agent [state []] keys))
         
-        (unlatching-watcher [#^java.util.concurrent.CountDownLatch latch a old-val new-val]
-            "If the new value is not a map, decrements the countdown latch."
-            (do
-                (if (not (map? new-val))
-                    (.countDown latch))
-                    latch))
-        
-        (create-latch [state keys]
-            "Creates a latch that watches the given keys during a concurrent
-            update."
-            (let [agent-keys (filter (comp agent? state) keys)
-                latch (java.util.concurrent.CountDownLatch. (count agent-keys))
-                watcher-adder (fn [a] (add-watch a latch unlatching-watcher))])
-                (do
-                    (map-now watcher-adder (select-keys state agent-keys))
-                    latch))
-        
-        (start-concurrent-update [state roots]
+        (start-concurrent-update [state roots latch-agent]
             "Starts a concurrent update going."
-            (map-now #(m-update (state %) state % {}) roots))
+            (map-now #(m-update (state %) state % {} latch-agent) roots))
             
         (concurrent-update [state & keys]
-            "Does a concurrent update of the given keys."
+            "Does a concurrent update of the given keys. Returns an agent
+            whose status will change to :done when the update is over."
             (let [[state roots] (create-agents state keys)
-                    latch (create-latch state keys)]
+                    latch-agent (agent [state (set (filter (comp not state) keys))])]
                 (do
-                    (start-concurrent-update state roots)
-                    (.await latch)
-                    (zipmapmap deref-or-val state))))
+                    (start-concurrent-update state roots latch-agent)
+                    latch-agent)))
         
         ] 
         {:update update-nodes :forget forget :change change :cupdate concurrent-update}))
