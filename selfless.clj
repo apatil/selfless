@@ -8,9 +8,9 @@
 
 ;TODO: Handle errors in concurrent update.
 
-;TODO: Return concurrent state as a delay, Need to have a watcher that releases a lock
-;when the latch agent is done. The delay needs to acquire the lock, then deref the latch
-;agent and return its state.
+;TODO: Be able to add a watcher to the latch agent in concurrent updates. One possible
+;watcher would simply release a lock when the agent is done. This could be used to
+;return the state as a delay.
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
@@ -126,14 +126,15 @@
             "Starts a concurrent update going."
             (map-now #(m-update (state %) state % {} latch-agent) roots))
             
-        (concurrent-update [state & keys]
+        (concurrent-update [state watcher-fn & keys]
             "Does a concurrent update of the given keys. Returns an agent
-            whose status will change to :done when the update is over."
+            whose status will change to :done when the update is over.
+            Returns two things: a fn to start the update, and the 'latch
+            agent'."
             (let [[state roots] (create-agents state keys)
-                    latch-agent (agent [state (set (filter (comp not state) keys))])]
-                (do
-                    (start-concurrent-update state roots latch-agent)
-                    latch-agent)))
+                    latch-agent (agent [state (set (filter (comp not state) keys))
+                    watch (add-watch watcher-fn latch-agent)])]
+                    [(fn [] (start-concurrent-update state roots latch-agent)) latch-agent]))
         
         ] 
         {:update update-nodes :forget forget :change change :cupdate concurrent-update}))
