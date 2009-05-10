@@ -125,6 +125,9 @@
     "Creates a flow and binds it to a symbol. See also 'flow'."
     `(def ~sym (flow ~(eval init-flow) ~bindings)))
     
-(defn flow-graph [flow]
+(defn flow-graph [dir flow]
     "Returns a clojure-contrib graph corresponding to the given flow."
-    (struct directed-graph (keys flow) #(:children (flow %))))
+    (struct directed-graph (keys flow) #(dir (flow %))))
+
+(def forward-graph (partial flow-graph :children))
+(def backward-graph (partial flow-graph :parents))
