@@ -1,5 +1,6 @@
-(ns selfless)
-(use 'clojure.contrib.graph)
+(ns selfless
+    (:use clojure.contrib.graph))
+
 
 ; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
 ; if possible. Propagate value message to children if value changed, otherwise do
@@ -68,7 +69,7 @@
             (if (state key) state
                 (let [node (flow key)
                     parents (node-parents node)
-                    new-state (reduce update-node state parets)]
+                    new-state (reduce update-node state parents)]
                 (assoc new-state key ((node-fn node) new-state)))))        
         
         ; ======================
@@ -99,7 +100,7 @@
             "A message agents send to the latch agent when they update.
             Its value consists of a [state keys-remaining] couple. When
             keys-remaining is zero, the requested update has been made."
-            (let [new-state (merge state new-val)
+            (let [new-state (merge state new-vals)
                 new-keys (apply (partial disj keys-remaining) (keys new-vals))]))
             
         (create-agent [state-and-roots key]
@@ -132,8 +133,8 @@
             Returns two things: a fn to start the update, and the 'latch
             agent'."
             (let [[state roots] (create-agents state keys)
-                    latch-agent (agent [state (set (filter (comp not state) keys))
-                    watch (add-watch watcher-fn latch-agent)])]
+                    latch-agent (agent state (set (filter (comp not state) keys)))
+                    watch (add-watch watcher-fn latch-agent)]
                     [(fn [] (start-concurrent-update state roots latch-agent)) latch-agent]))
         
         ] 
