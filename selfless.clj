@@ -71,15 +71,15 @@
                     new-state (reduce update-node state parents)]
                 (assoc new-state key ((node-fn node) new-state)))))        
         
-        ; ======================
-        ; = Concurrent updates =
-        ; ======================
         (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
             recomputation to parents."
             (reduce update-node state keys))
         
-        (m-update [parent-vals state key new-pv latch-agent]
+        ; ======================
+        ; = Concurrent updates =
+        ; ======================
+        (m-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
             updated."
             (let [new-vals (merge parent-vals new-pv)
@@ -89,8 +89,8 @@
                     (let [new-val ((node-fn node) new-vals)
                             msg-map {key new-val}] 
                         (do
-                            (map-now #(send m-update (state %) state % msg-map latch-agent) (node-children node))
-                            (send m-record latch-agent msg-map)
+                            (map-now #(send (state %) m-update state % msg-map collating-agent) (node-children node))
+                            (send collating-agent m-record msg-map)
                             new-val))
                     ; Otherwise just record the parent's value.
                     new-vals)))
@@ -100,7 +100,8 @@
             Its value consists of a [state keys-remaining] couple. When
             keys-remaining is zero, the requested update has been made."
             (let [new-state (merge state new-vals)
-                new-keys (apply (partial disj keys-remaining) (keys new-vals))]))
+                new-keys (apply (partial disj keys-remaining) (keys new-vals))]
+                [new-state new-keys]))
             
         (create-agent [state-and-roots key]
             "Creates an agent at the given key, which is responsible for 
@@ -111,28 +112,22 @@
                 (if (state key) [state roots]
                     (let [node (flow key)
                             parents (node-parents node)
-                            parent-vals (select-keys state (filter (comp not agent? state) parents))]
+                            parent-vals (select-keys state (filter (comp not agent? state) parents))
+                            [state roots] (reduce create-agent [state roots] parents)]
                         ; Update the state with new agents at this node and at the parent nodes
-                        [(assoc ((reduce create-agent [state roots] parents) 0) key (agent parent-vals)) 
+                        [(assoc state key (agent parent-vals)) 
                         ; If this is a root node, add it to the roots.
                         (if (= (count parent-vals) (count parents)) (conj roots key) roots)]))))
-        
-        (create-agents [state keys]
-            "Fills in the state with agents responsible for computing
-            values at the requisite keys."
-            (reduce create-agent [state []] keys))
-        
-        (start-concurrent-update [state roots latch-agent]
-            "Starts a concurrent update going."
-            (map-now #(m-update (state %) state % {} latch-agent) roots))
             
         (concurrent-update [state & keys-to-update]
             "Does a concurrent update of the given keys. Returns three things: an agent
             whose state will eventually change to [requested state []], a fn to start
             the update, and the agent-filled state."
-            (let [[new-state roots] (create-agents state keys-to-update)
-                    latch-agent (agent [state (set (filter (comp not state) (keys new-state)))])]
-                    [latch-agent (fn [] (start-concurrent-update new-state roots latch-agent)) new-state]))
+            (let [[new-state roots] (reduce create-agent [state []] keys-to-update)
+                la (print roots "\n")
+                    collating-agent (agent [state (set (filter (comp not state) (keys new-state)))])
+                    start (fn [] (map-now #(send (new-state %) m-update new-state % {} collating-agent) roots))]
+                    [collating-agent start new-state]))
         
         ] 
         {:update update-nodes :forget forget :change change :c-update concurrent-update}))
