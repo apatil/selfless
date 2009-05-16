@@ -31,7 +31,9 @@
     [new-state spotty-state newer-state newerer-state blocked-change-state])
     
 (with-flow flow3
-    [[a f s] (c-update {:x 3} :z :x :y :w)]
+    [[fa a] (a-update {:x 3} :z :x :y :w)
+    [fc c] (c-update {:x 3} :z :x :y :w)]
+    (def fa fa)
+    (def fc fc)
     (def a a)
-    (def f f)
-    (def s s))
+    (def c c))

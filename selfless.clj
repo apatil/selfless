@@ -109,18 +109,31 @@
                     [(assoc state key (agent parent-vals)) 
                     ; If this is a root node, add it to the roots.
                     (if (= (count parent-vals) (count parents)) (conj roots key) roots)])))
+        
+        (concurrent-state [state & keys-to-update]
+            "Returns a state with agents in the keys that need to be updated,
+            and the set of 'root keys' corresponding to agents that can start 
+            updating immediately."
+            (reduce (partial create-agent state) [state []] keys-to-update))
             
         (concurrent-update [state & keys-to-update]
+            "Returns a fn that starts the update, and the agent-filled new 
+            state."
+            (let [[new-state roots] (apply concurrent-state state keys-to-update)
+                    start (fn [] (map-now #(send (new-state %) m-update new-state % {} nil) roots))]
+                [start new-state]))
+            
+        (agent-update [state & keys-to-update]
             "Does a concurrent update of the given keys. Returns three things: an agent
             whose state will eventually change to [requested state []], a fn to start
             the update, and the agent-filled state."
-            (let [[new-state roots] (reduce (partial create-agent state) [state []] keys-to-update)
+            (let [[new-state roots] (apply concurrent-state state keys-to-update)
                     collating-agent (agent [state (set (filter (comp not state) (keys new-state)))])
                     start (fn [] (map-now #(send (new-state %) m-update new-state % {} collating-agent) roots))]
-                    [collating-agent start new-state]))
+                    [start collating-agent]))
         
         ] 
-        {:update update-nodes :forget forget :change change :c-update concurrent-update}))
+        {:update update-nodes :forget forget :change change :c-update concurrent-update :a-update agent-update}))
         
 
 
@@ -165,7 +178,8 @@
     `(let [~'update ((meta ~flow) :update)
             ~'forget ((meta ~flow) :forget)
             ~'change ((meta ~flow) :change)
-            ~'c-update ((meta ~flow) :c-update)]
+            ~'c-update ((meta ~flow) :c-update)
+            ~'a-update ((meta ~flow) :a-update)]
             (let ~bindings ~@exprs)))
 
 (defn- pair-to-node [fl [sym body]]
