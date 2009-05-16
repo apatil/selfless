@@ -1,5 +1,6 @@
 (load-file "selfless.clj")
 (refer 'selfless)
+(use 'clojure.contrib.stacktrace)
 
 ; ========
 ; = Test =
@@ -28,3 +29,9 @@
     blocked-change-state (change new-state {:x 11})]
 
     [new-state spotty-state newer-state newerer-state blocked-change-state])
+    
+(with-flow flow3
+    [[a f s] (c-update {:x 3} :z :x :y :w)]
+    (def a a)
+    (def f f)
+    (def s s))

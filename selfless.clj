@@ -1,17 +1,16 @@
 (ns selfless
     (:use clojure.contrib.graph))
+(use 'clojure.contrib.pprint)
 
 
 ; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
-; if possible. Propagate value message to children if value changed, otherwise do
-; nothing. Useful for 'index' nodes whose value won't usually change even if parents
-; change.
+; TODO: if possible. Propagate value message to children if value changed, otherwise do
+; TODO: nothing. Useful for 'index' nodes whose value won't usually change even if parents
+; TODO: change.
 
-;TODO: Handle errors in concurrent update.
+; TODO: Handle errors in concurrent update.
 
-;TODO: Be able to add a watcher to the latch agent in concurrent updates. One possible
-;watcher would simply release a lock when the agent is done. This could be used to
-;return the state as a delay.
+(defn pre [x] (do (print x "\n") x))
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
@@ -109,12 +108,12 @@
             if necessary."
             (let [state (state-and-roots 0)
                     roots (state-and-roots 1)]
-                (if (state key) state
+                (if (state key) [state roots]
                     (let [node (flow key)
                             parents (node-parents node)
                             parent-vals (select-keys state (filter (comp not agent? state) parents))]
                         ; Update the state with new agents at this node and at the parent nodes
-                        [(assoc (reduce create-agent state parents) key (agent parent-vals)) 
+                        [(assoc ((reduce create-agent [state roots] parents) 0) key (agent parent-vals)) 
                         ; If this is a root node, add it to the roots.
                         (if (= (count parent-vals) (count parents)) (conj roots key) roots)]))))
         
@@ -127,18 +126,16 @@
             "Starts a concurrent update going."
             (map-now #(m-update (state %) state % {} latch-agent) roots))
             
-        (concurrent-update [state watcher-fn & keys]
-            "Does a concurrent update of the given keys. Returns an agent
-            whose status will change to :done when the update is over.
-            Returns two things: a fn to start the update, and the 'latch
-            agent'."
-            (let [[state roots] (create-agents state keys)
-                    latch-agent (agent state (set (filter (comp not state) keys)))
-                    watch (add-watch watcher-fn latch-agent)]
-                    [(fn [] (start-concurrent-update state roots latch-agent)) latch-agent]))
+        (concurrent-update [state & keys-to-update]
+            "Does a concurrent update of the given keys. Returns three things: an agent
+            whose state will eventually change to [requested state []], a fn to start
+            the update, and the agent-filled state."
+            (let [[new-state roots] (create-agents state keys-to-update)
+                    latch-agent (agent [state (set (filter (comp not state) (keys new-state)))])]
+                    [latch-agent (fn [] (start-concurrent-update new-state roots latch-agent)) new-state]))
         
         ] 
-        {:update update-nodes :forget forget :change change :cupdate concurrent-update}))
+        {:update update-nodes :forget forget :change change :c-update concurrent-update}))
         
 
 
@@ -182,7 +179,8 @@
     functions in context of flow."
     `(let [~'update ((meta ~flow) :update)
             ~'forget ((meta ~flow) :forget)
-            ~'change ((meta ~flow) :change)]
+            ~'change ((meta ~flow) :change)
+            ~'c-update ((meta ~flow) :c-update)]
             (let ~bindings ~@exprs)))
 
 (defn- pair-to-node [fl [sym body]]
