@@ -1,6 +1,5 @@
 (ns selfless
-    (:use clojure.contrib.graph))
-(use 'clojure.contrib.pprint)
+    (:use clojure.contrib.graph clojure.contrib.monads))
 
 
 ; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
@@ -16,8 +15,6 @@
 ; TODO: Give dataflows an optional 'monad' attribute. Then they can evaluate states in 
 ; TODO: Then add-root and add-node should just use m-result and m-bind from that monad.
 ; TODO: Probability models will use the maybe monad, with m-zero being a special keyword.
-
-; TODO: Evaluate with-flow using state monad.
 
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
