@@ -67,7 +67,7 @@
         ; ======================
         ; = Concurrent updates =
         ; ======================
-        (m-update [parent-vals state key new-pv collating-agent]
+        (msg-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
             updated."
             (let [new-vals (merge parent-vals new-pv) node (flow key)]
@@ -76,14 +76,14 @@
                     (let [new-val (try ((:fn node) new-vals) (catch Exception err err)) msg-map {key new-val}] 
                         (do
                             ; Notify children of the update.
-                            (map-now #(send (state %) m-update state % msg-map collating-agent) (:children node))
+                            (map-now #(send (state %) msg-update state % msg-map collating-agent) (:children node))
                             ; If there is a collating agent, notify it of the update.
-                            (if collating-agent (send collating-agent m-record msg-map))
+                            (if collating-agent (send collating-agent msg-record msg-map))
                             new-val))
                     ; Otherwise just record the parent's value.
                     new-vals)))
         
-        (m-record [[state keys-remaining] new-vals]
+        (msg-record [[state keys-remaining] new-vals]
             "A message agents send to the collating agent when they update.
             Its value consists of a [state keys-remaining] couple. When
             keys-remaining is zero, the requested update has been made."
@@ -112,7 +112,7 @@
         
         (start-c-update [state roots collating-agent] 
             "Used by the concurrent updates."
-            (fn [] (map-now #(send (state %) m-update state % {} collating-agent) roots)))
+            (fn [] (map-now #(send (state %) msg-update state % {} collating-agent) roots)))
             
         (concurrent-update [state & keys-to-update]
             "Returns a fn that starts the update, and the new state with agents
