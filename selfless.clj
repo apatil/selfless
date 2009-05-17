@@ -118,7 +118,7 @@
             updating immediately."
             (reduce (partial create-agent state) [state []] keys-to-update))
         
-        (start-fn [state roots collating-agent] 
+        (start-c-update [state roots collating-agent] 
             "Used by the concurrent updates."
             (fn [] (map-now #(send (state %) m-update state % {} collating-agent) roots)))
             
@@ -127,7 +127,7 @@
             corresponding to all the keys whose values are requested but not
             known."
             (let [[new-state roots] (apply agent-filled-state state keys-to-update)
-                    start (start-fn new-state roots nil)]
+                    start (start-c-update new-state roots nil)]
                 [start new-state]))
             
         (agent-update [state & keys-to-update]
@@ -135,16 +135,19 @@
             to start the update and an agent whose state will eventually change to 
             [requested state []]."
             (let [[new-state roots] (apply agent-filled-state state keys-to-update)
+                    ; An agent whose value will eventually be the up-to-date state
                     collating-agent (agent [state (set (filter (comp not state) (keys new-state)))])
-                    start (start-fn new-state roots collating-agent)]
+                    start (start-c-update new-state roots collating-agent)]
                     [start collating-agent]))
                     
         (future-update [state & keys-to-update]
             "Does a concurrent update of the given keys. Returns a delay which, when
             forced, returns the updated state."
             (let [[s a] (apply agent-update state keys-to-update)
+                    ; Create a countdown latch and a watcher that opens the latch when the state is ready.
                     latch (java.util.concurrent.CountDownLatch. 1)
                     w (add-watch a latch (fn [k r old-v new-v] (if (= (count (new-v 1)) 0) (.countDown k))))
+                    ; Start the update.
                     nothing (s)]
                     (delay (do (.await latch) (@a 0)))))
         
