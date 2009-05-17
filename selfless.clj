@@ -1,20 +1,16 @@
 (ns selfless
     (:use clojure.contrib.graph clojure.contrib.monads))
 
+(set! *warn-on-reflection* true)
 
 ; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
 ; TODO: if possible. Propagate value message to children if value changed, otherwise do
 ; TODO: nothing. Useful for 'index' nodes whose value won't usually change even if parents
 ; TODO: change.
 
-; TODO: In concurrent update, if an error is thrown, 
-; TODO:   First the collating agent should be notified,
-; TODO:   Then a message throwing the error should be sent to all the children,
-; TODO:   Then the error should be re-thrown.
-
-; TODO: Give dataflows an optional 'monad' attribute. Then they can evaluate states in 
-; TODO: Then add-root and add-node should just use m-result and m-bind from that monad.
-; TODO: Probability models will use the maybe monad, with m-zero being a special keyword.
+; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
+; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
+; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
 
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
@@ -67,19 +63,38 @@
         ; ======================
         ; = Concurrent updates =
         ; ======================
+        
+        (notify [collating-agent msg-map] 
+            "Notifies collating agent of an update."
+            (if collating-agent (send collating-agent msg-record msg-map)))
+        
+        (err-action [cur-state key collating-agent state children err] 
+            "Action taken by state-managing agents upon encountering an error.
+             The error is stored in the agent and propagated to children. It is
+             currently not possible to re-raise the error."
+            (do
+                (notify collating-agent {key err}))
+                (map-now #(send (state %) err-action %  collating-agent state children err) children)
+                err)
+        
         (msg-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
             updated."
-            (let [new-vals (merge parent-vals new-pv) node (flow key)]
+            (let [new-vals (merge parent-vals new-pv) 
+                    node (flow key)
+                    children (:children node)]
                 (if (= (count new-vals) (count (:parents node))) 
                     ; If the value can be computed, do it.
-                    (let [new-val (try ((:fn node) new-vals) (catch Exception err err)) msg-map {key new-val}] 
-                        (do
-                            ; Notify children of the update.
-                            (map-now #(send (state %) msg-update state % msg-map collating-agent) (:children node))
-                            ; If there is a collating agent, notify it of the update.
-                            (if collating-agent (send collating-agent msg-record msg-map))
-                            new-val))
+                    (try 
+                        (let [new-val ((:fn node) new-vals)  
+                            msg-map {key new-val}] 
+                            (do
+                                ; Notify children of the update.
+                                (map-now #(send (state %) msg-update state % msg-map collating-agent) (:children node))
+                                ; If there is a collating agent, notify it of the update.
+                                (notify collating-agent msg-map)
+                                new-val))
+                        (catch Exception err (err-action nil key collating-agent state children err)))
                     ; Otherwise just record the parent's value.
                     new-vals)))
         
@@ -138,7 +153,8 @@
             (let [[s a] (apply agent-update state keys-to-update)
                     ; Create a countdown latch and a watcher that opens the latch when the state is ready.
                     latch (java.util.concurrent.CountDownLatch. 1)
-                    w (add-watch a latch (fn [k r old-v new-v] (if (= (count (new-v 1)) 0) (.countDown k))))
+                    w (add-watch a latch (fn [#^java.util.concurrent.CountDownLatch latch r old-v new-v] 
+                                            (if (= (count (new-v 1)) 0) (.countDown latch))))
                     ; Start the update.
                     nothing (s)]
                     (delay (do (.await latch) (@a 0)))))
