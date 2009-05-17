@@ -16,13 +16,17 @@
     y (fn2 x 17 x 2 5)
     z (fn3 y)
     w (fn4 x z)])
+
+(def flow5 (add-node flow3 :v fn4 {:timing :oblivious} [:x :w]))
     
-(def flosures3 (flosures flow3))
+(def flosures3 (flosures flow5))
+
+
 
 ; Create some states
 (with-flosures flosures3
     [init-state (change {} {:x 3})
-    new-state (update init-state :z :x :y :w)
+    new-state (update init-state :z :x :y :w :v)
     spotty-state (forget new-state :z)
 
     newer-state (change {} {:x 11})
@@ -30,7 +34,7 @@
 
     blocked-change-state (change new-state {:x 11})]
 
-    [new-state spotty-state newer-state newerer-state blocked-change-state])
+    (apply print [new-state spotty-state newer-state newerer-state blocked-change-state]))
     
 (with-flosures flosures3
     [[fa a] (a-update {:x 3} :z :x :y :w)

@@ -31,8 +31,14 @@
             If they are eager, attempts to recompute their values
             before taking the above action."
             (let [node (flow key)
-                children (if node (:children node) [])]
-                (apply dissoc (reduce forget-children state children) children)))
+                eager? (= (:timing node) :eager)
+                children (:children node)]
+                    ; If the node is eagerly-updating, give it a chance right now.
+                    (if eager?
+                        (if (every? (map state (:parents node)))
+                            (update-node state key)
+                            (apply forget state children))
+                        (apply forget state children))))
 
         (change [state new-substate]
             "Sets the flow's value at certain keys to new values.
@@ -167,7 +173,7 @@
         :a-update agent-update 
         :f-update future-update}))
 
-(defn add-node [flow key fun block? & [args]]
+(defn add-node [flow key fun {:keys [timing] :or {timing :lazy}} & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
     (if (flow key) 
@@ -178,11 +184,11 @@
             ; A partially-applied version of the function that takes nodes only
             pfun #(apply fun (replace % args))                  
             ; The flow, with the new function added
-            new-flow (assoc flow key {:fn pfun :parents parents :children #{} :block block?})
+            new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})
             ; A function adding key to the children list of a parent.
             add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
-            (if (and parents (not block?))
+            (if (and parents (not= timing :oblivious))
                 (reduce add-child new-flow parents)
                 new-flow))))
                 
@@ -220,7 +226,7 @@
             keys (keys fl)
             symbs (map (comp symbol name) keys)
             args (replace (zipmap symbs keys) args)] 
-            (add-node fl key f block? args)))))
+            (add-node fl key f :lazy args)))))
 
 (defmacro flow [init-flow bindings]
     "Creates a flow with syntax similar to let-bindings."
