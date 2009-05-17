@@ -36,14 +36,14 @@
 
         blocked-change-state (change new-state {:x 11})]
 
-        (print [new-state blocked-change-state])))
+        [new-state blocked-change-state]))
     
 (with-flosures flosures3
-    [[fa a] (a-update {:x 3} :z :x :y :w :v :q)
-    [fc c] (c-update {:x 3} :z :x :y :w :v :q)
-    d (f-update {:x 3} :z :x :y :w :v :q)]
-    (def fa fa)
+    [;[fa a] (a-update {:x 3} :z :x :y :w :v :q)
+    [fc c] (c-update {:x 3} :z :x :y :w :v :q)]
+;    d (f-update {:x 3} :z :x :y :w :v :q)]
+;    (def fa fa)
     (def fc fc)
-    (def a a)
-    (def c c)
-    (def d d))
+ ;   (def a a)
+(def c c))
+;    (def d d))
