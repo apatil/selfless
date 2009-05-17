@@ -32,8 +32,10 @@
     
 (with-flow flow3
     [[fa a] (a-update {:x 3} :z :x :y :w)
-    [fc c] (c-update {:x 3} :z :x :y :w)]
+    [fc c] (c-update {:x 3} :z :x :y :w)
+    d (f-update {:x 3} :z :x :y :w)]
     (def fa fa)
     (def fc fc)
     (def a a)
-    (def c c))
+    (def c c)
+    (def d d))
