@@ -6,7 +6,7 @@
 ; = Test =
 ; ========
 
-(defn fn2 [a b c d e] [a b c d e])
+(defn fn2 [a b c d e] [a b c d e  "a"])
 (defn fn3 [y] (apply + y))
 (defn fn4 [x y] (+ x y))
 
@@ -19,18 +19,18 @@
     
 (def flosures3 (flosures flow3))
 
-; Create some states
-(with-flosures flosures3
-    [init-state (change {} {:x 3})
-    new-state (update init-state :z :x :y :w)
-    spotty-state (forget new-state :z)
-
-    newer-state (change {} {:x 11})
-    newerer-state (update newer-state :y :w)
-
-    blocked-change-state (change new-state {:x 11})]
-
-    [new-state spotty-state newer-state newerer-state blocked-change-state])
+;; Create some states
+;(with-flosures flosures3
+;    [init-state (change {} {:x 3})
+;    new-state (update init-state :z :x :y :w)
+;    spotty-state (forget new-state :z)
+;
+;    newer-state (change {} {:x 11})
+;    newerer-state (update newer-state :y :w)
+;
+;    blocked-change-state (change new-state {:x 11})]
+;
+;    [new-state spotty-state newer-state newerer-state blocked-change-state])
     
 (with-flosures flosures3
     [[fa a] (a-update {:x 3} :z :x :y :w)

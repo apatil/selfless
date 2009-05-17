@@ -68,14 +68,14 @@
             "Notifies collating agent of an update."
             (if collating-agent (send collating-agent msg-record msg-map)))
         
-        (err-action [cur-state key collating-agent state children err] 
+        (msg-err [parent-vals state key err collating-agent] 
             "Action taken by state-managing agents upon encountering an error.
              The error is stored in the agent and propagated to children. It is
              currently not possible to re-raise the error."
             (do
-                (notify collating-agent {key err}))
-                (map-now #(send (state %) err-action %  collating-agent state children err) children)
-                err)
+                (notify collating-agent {key err})
+                (map-now #(send (state %) msg-err state % err collating-agent) ((flow key) :children))
+                err))
         
         (msg-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
@@ -94,7 +94,7 @@
                                 ; If there is a collating agent, notify it of the update.
                                 (notify collating-agent msg-map)
                                 new-val))
-                        (catch Exception err (err-action nil key collating-agent state children err)))
+                        (catch Exception err (msg-err parent-vals state key err collating-agent)))
                     ; Otherwise just record the parent's value.
                     new-vals)))
         
