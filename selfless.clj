@@ -3,10 +3,8 @@
 
 (set! *warn-on-reflection* true)
 
-; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
-; TODO: if possible. Propagate value message to children if value changed, otherwise do
-; TODO: nothing. Useful for 'index' nodes whose value won't usually change even if parents
-; TODO: change.
+; TODO: create-agent should add watchers to parents. That way you can remove some update code
+; TODO: and you don't have to rely on knowing who the children are when updating.
 
 ; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
@@ -46,9 +44,9 @@
             
         (eager-update [[state keys] key]
             "Intended to be reduced over [state keys] pair. At end of
-            reduce, state will be updated with values of all eager keys
-            that were ready to compute, and keys will contain all keys
-            that did not get updated."
+            reduce, state will be updated with values of all eager nodes
+            that were ready to compute, and keys will contain keys of all 
+            nodes that did not get updated."
             (let [node (flow key)
                 eager? (= (:timing node) :eager)]
                 (if eager?
