@@ -3,9 +3,6 @@
 
 (set! *warn-on-reflection* true)
 
-; TODO: create-agent should add watchers to parents. That way you can remove some update code
-; TODO: and you don't have to rely on knowing who the children are when updating.
-
 ; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
 ; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
@@ -93,6 +90,8 @@
             (fn [cur-val parent]
                 (let [parent-val (deref parent)]
                     (if (::status parent-val)
+                        ; If the parent is up-to-date or in error, remove it from the set of keys
+                        ; that need updates.
                         [(assoc (cur-val 0) parent-key (::value parent-val)) (disj (cur-val 1) parent-key)]))))
         
         (add-recording-watcher [[key val] collating-agent]
@@ -108,19 +107,19 @@
         (watch-fn [parent-key child-node]
             "This function is sent to the child when the parent's value changes
             by a watcher."
-            (let [parents (:parents child-node)
-                    update-fn (:fn child-node)]
+            (let [parents (:parents child-node) update-fn (:fn child-node)]
                 (fn [child-val parent]
-                    (let [parent-val (deref parent)
-                            status (::status parent-val)
-                            value (::value parent-val)]
+                    (let [parent-val (deref parent) status (::status parent-val) value (::value parent-val)]
                         (cond
                             (= ::up-to-date status)
+                                ; If the parent is now up-to-date, assoc its value.                            
                                 (let [new-vals (assoc child-val parent-key value)]
                                     (if (= (count new-vals) (count parents))
+                                        ; Compute if possible.
                                         (try-update update-fn new-vals)
                                         new-vals))
                             (= ::error status)
+                                ; If the parent is now in error, replicate the error.
                                 {::value value ::status ::error}
                             true
                                 child-val)))))
@@ -142,9 +141,10 @@
                         a (agent parent-vals)]
                     ; Update the state with new agents at this node and at the parent nodes
                     [(assoc state key a) 
-                    ; If this is a root node, add it to the roots.
                     (if (= (count parent-vals) (count parents)) 
+                        ; If this is a root node, add it to the roots.
                         (conj roots key)
+                        ; Otherwise, add watchers to its parents.
                         (do
                             (map-now #(add-update-watcher % key a state) parents)
                             roots))])))
