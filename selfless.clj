@@ -28,18 +28,6 @@
 
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
 
-(defmacro structmap-and-accessors [sym & fields]
-    "Defunes a structmap with given symbol, and defines accessors 
-    for all its fields."
-    (let [code-lst `(defstruct ~sym ~@fields)
-            sym-dash (.concat (name sym) "-")
-            accessor-names (zipmap fields (map (comp #(.concat sym-dash %) name) fields))]
-        (cons 'do (cons code-lst
-            (for [field fields] (let [n (accessor-names field) s (symbol n)]
-                `(def ~s (accessor ~sym ~field))))))))
-                
-(structmap-and-accessors node :fn :parents :children :block?)
-
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
     (letfn [
@@ -54,7 +42,7 @@
             If they are eager, attempts to recompute their values
             before taking the above action."
             (let [node (flow key)
-                children (if node (node-children node) [])]
+                children (if node (:children node) [])]
                 (apply dissoc (reduce forget-children state children) children)))
 
         (change [state new-substate]
@@ -74,9 +62,9 @@
             and any ancestral values necessary to compute it."
             (if (state key) state
                 (let [node (flow key)
-                    parents (node-parents node)
+                    parents (:parents node)
                     new-state (reduce update-node state parents)]
-                (assoc new-state key ((node-fn node) new-state)))))        
+                (assoc new-state key ((:fn node) new-state)))))        
         
         (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
@@ -90,12 +78,12 @@
             "A message that a parent can send to a child when it has 
             updated."
             (let [new-vals (merge parent-vals new-pv) node (flow key)]
-                (if (= (count new-vals) (count (node-parents node))) 
+                (if (= (count new-vals) (count (:parents node))) 
                     ; If the value can be computed, do it.
-                    (let [new-val (try ((node-fn node) new-vals) (catch Exception err err)) msg-map {key new-val}] 
+                    (let [new-val (try ((:fn node) new-vals) (catch Exception err err)) msg-map {key new-val}] 
                         (do
                             ; Notify children of the update.
-                            (map-now #(send (state %) m-update state % msg-map collating-agent) (node-children node))
+                            (map-now #(send (state %) m-update state % msg-map collating-agent) (:children node))
                             ; If there is a collating agent, notify it of the update.
                             (if collating-agent (send collating-agent m-record msg-map))
                             new-val))
@@ -115,7 +103,7 @@
             computing the value at that key. Creates agents for parents
             if necessary."
             (if (state key) [state roots]
-                (let [parents (node-parents (flow key))
+                (let [parents (:parents (flow key))
                         parent-vals (select-keys orig-state parents)
                         [state roots] (reduce (partial create-agent orig-state) [state roots] parents)]
                     ; Update the state with new agents at this node and at the parent nodes
@@ -169,13 +157,6 @@
         :c-update concurrent-update 
         :a-update agent-update 
         :f-update future-update}))
-        
-
-
-(defn update-flow-meta [flow]
-    "Called automatically when flow is changed using add-node etc.
-    Appends closure functions useful for altering states to flow."
-    (with-meta flow (flosures flow)))
 
 (defn add-node [flow key fun block? & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
@@ -188,14 +169,13 @@
             ; A partially-applied version of the function that takes nodes only
             pfun #(apply fun (replace % args))                  
             ; The flow, with the new function added
-            new-flow (assoc flow key (struct node pfun parents #{} block?))
+            new-flow (assoc flow key {:fn pfun :parents parents :children #{} :block block?})
             ; A function adding key to the children list of a parent.
             add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
-            (update-flow-meta
-                (if (and parents (not block?))
-                    (reduce add-child new-flow parents)
-                    new-flow)))))
+            (if (and parents (not block?))
+                (reduce add-child new-flow parents)
+                new-flow))))
                 
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
@@ -207,15 +187,15 @@
         name-fn #(.concat sym-dash (name %))]
     (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
     
-(defmacro with-flow [flow bindings & exprs] 
+(defmacro with-flosures [flosures bindings & exprs] 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
-    `(let [~'update ((meta ~flow) :update)
-            ~'forget ((meta ~flow) :forget)
-            ~'change ((meta ~flow) :change)
-            ~'c-update ((meta ~flow) :c-update)
-            ~'a-update ((meta ~flow) :a-update)
-            ~'f-update ((meta ~flow) :f-update)]
+    `(let [~'update (~flosures :update)
+            ~'forget (~flosures :forget)
+            ~'change (~flosures :change)
+            ~'c-update (~flosures :c-update)
+            ~'a-update (~flosures :a-update)
+            ~'f-update (~flosures :f-update)]
             (let ~bindings ~@exprs)))
 
 (defn- pair-to-node [fl [sym body]]
