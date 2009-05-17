@@ -78,7 +78,7 @@
             (let [new-vals (merge parent-vals new-pv) node (flow key)]
                 (if (= (count new-vals) (count (node-parents node))) 
                     ; If the value can be computed, do it.
-                    (let [new-val ((node-fn node) new-vals) msg-map {key new-val}] 
+                    (let [new-val (try ((node-fn node) new-vals) (catch Exception err err)) msg-map {key new-val}] 
                         (do
                             ; Notify children of the update.
                             (map-now #(send (state %) m-update state % msg-map collating-agent) (node-children node))
