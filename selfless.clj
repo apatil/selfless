@@ -8,7 +8,21 @@
 ; TODO: nothing. Useful for 'index' nodes whose value won't usually change even if parents
 ; TODO: change.
 
-; TODO: Handle errors in concurrent update.
+; TODO: In concurrent update, if an error is thrown, 
+; TODO:   First the collating agent should be notified,
+; TODO:   Then a message throwing the error should be sent to all the children,
+; TODO:   Then the error should be re-thrown.
+
+; TODO: Give dataflows an optional 'monad' attribute. Then they can evaluate states in 
+; TODO: Then add-root and add-node should just use m-result and m-bind from that monad.
+; TODO: Probability models will use the maybe monad, with m-zero being a special keyword.
+
+; TODO: Evaluate with-flow using state monad.
+
+; TODO: Don't update metadata automatically. Require user to make a 'flonad' from a flow
+; TODO: in order to use with-flow. The flonad can just be a map. No need to mess around
+; TODO: with metadata.
+
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
