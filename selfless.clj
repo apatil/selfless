@@ -88,6 +88,23 @@
                 new-keys (apply (partial disj keys-remaining) (keys new-vals))]
                 [new-state new-keys]))
         
+        (record-watch-fn [parent-key]
+            "Allows collating agents to watch leaf nodes for update."
+            (fn [cur-val parent]
+                (let [parent-val (deref parent)]
+                    (if (::status parent-val)
+                        [(assoc (cur-val 0) parent-key (::value parent-val)) (disj (cur-val 1) parent-key)]))))
+        
+        (add-recording-watcher [[key val] collating-agent]
+            "Adds collating agent as a watcher to the key."
+            (if (agent? val)
+                (add-watcher val :send collating-agent (record-watch-fn key))))
+        
+        (try-update [update-fn parent-vals]
+            "Tries an update, sets status to error if an error is thrown."
+            (try {::value (update-fn parent-vals) ::status ::up-to-date}
+                (catch Exception err {::value err ::status ::error})))
+        
         (watch-fn [parent-key child-node]
             "This function is sent to the child when the parent's value changes
             by a watcher."
@@ -101,8 +118,7 @@
                             (= ::up-to-date status)
                                 (let [new-vals (assoc child-val parent-key value)]
                                     (if (= (count new-vals) (count parents))
-                                        (try {::value (update-fn new-vals) ::status ::up-to-date}
-                                            (catch Exception err {::value err ::status ::error}))
+                                        (try-update update-fn new-vals)
                                         new-vals))
                             (= ::error status)
                                 {::value value ::status ::error}
@@ -158,6 +174,7 @@
             (let [[new-state roots] (apply create-agents state keys-to-update)
                     ; An agent whose value will eventually be the up-to-date state
                     collating-agent (agent [state (set (filter (comp not state) (keys new-state)))])
+                    nothing (map-now #(add-recording-watcher % collating-agent) new-state)
                     start (start-c-update new-state roots collating-agent)]
                     [start collating-agent]))
                     
