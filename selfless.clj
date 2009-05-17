@@ -19,10 +19,6 @@
 
 ; TODO: Evaluate with-flow using state monad.
 
-; TODO: Don't update metadata automatically. Require user to make a 'flonad' from a flow
-; TODO: in order to use with-flow. The flonad can just be a map. No need to mess around
-; TODO: with metadata.
-
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
