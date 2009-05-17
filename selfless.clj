@@ -109,7 +109,7 @@
                     ; If this is a root node, add it to the roots.
                     (if (= (count parent-vals) (count parents)) (conj roots key) roots)])))
         
-        (agent-filled-state [state & keys-to-update]
+        (create-agents [state & keys-to-update]
             "Returns a state with agents in the keys that need to be updated,
             and the set of 'root keys' corresponding to agents that can start 
             updating immediately."
@@ -123,7 +123,7 @@
             "Returns a fn that starts the update, and the new state with agents
             corresponding to all the keys whose values are requested but not
             known."
-            (let [[new-state roots] (apply agent-filled-state state keys-to-update)
+            (let [[new-state roots] (apply create-agents state keys-to-update)
                     start (start-c-update new-state roots nil)]
                 [start new-state]))
             
@@ -131,7 +131,7 @@
             "Does a concurrent update of the given keys. Returns two things: a fn 
             to start the update and an agent whose state will eventually change to 
             [requested state []]."
-            (let [[new-state roots] (apply agent-filled-state state keys-to-update)
+            (let [[new-state roots] (apply create-agents state keys-to-update)
                     ; An agent whose value will eventually be the up-to-date state
                     collating-agent (agent [state (set (filter (comp not state) (keys new-state)))])
                     start (start-c-update new-state roots collating-agent)]
