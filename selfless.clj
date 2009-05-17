@@ -17,6 +17,8 @@
 
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
 
+(defn has-keys? [m k] (every? identity (map (partial contains? m) k)))
+
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
     (letfn [
@@ -30,24 +32,35 @@
             propagates the 'message' to their children.
             If they are eager, attempts to recompute their values
             before taking the above action."
-            (let [node (flow key)
-                eager? (= (:timing node) :eager)
-                children (:children node)]
-                    ; If the node is eagerly-updating, give it a chance right now.
-                    (if eager?
-                        (if (every? (map state (:parents node)))
-                            (update-node state key)
-                            (apply forget state children))
-                        (apply forget state children))))
+            (if (state key)
+                (let [node (flow key)
+                    children (:children node)]
+                        ; If the node is eagerly-updating, give it a chance right now.
+                    (apply forget state children))
+                state))
 
         (change [state new-substate]
             "Sets the flow's value at certain keys to new values.
             Forgets children's values."
             (merge (reduce forget-children state (keys new-substate)) new-substate))
+            
+        (eager-update [[state keys] key]
+            "Intended to be reduced over [state keys] pair. At end of
+            reduce, state will be updated with values of all eager keys
+            that were ready to compute, and keys will contain all keys
+            that did not get updated."
+            (let [node (flow key)
+                eager? (= (:timing node) :eager)]
+                (if eager?
+                    (if (has-keys? state (:parents node))
+                        [(assoc state key ((:fn node) state)) keys]
+                        [state (conj keys key)])
+                    [state (conj keys key)])))
 
         (forget [state & keys]
             "Forgets the flow's value at given keys."
-            (apply dissoc (reduce forget-children state keys) keys))
+            (let [[new-state new-keys] (reduce eager-update [state []] keys)]
+                (apply dissoc (reduce forget-children new-state new-keys) new-keys)))
     
         ; =====================
         ; = Sequential update =
