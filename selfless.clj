@@ -29,7 +29,6 @@
             (if (state key)
                 (let [node (flow key)
                     children (:children node)]
-                        ; If the node is eagerly-updating, give it a chance right now.
                     (apply forget state children))
                 state))
 
@@ -46,6 +45,7 @@
             (let [node (flow key)
                 eager? (= (:timing node) :eager)]
                 (if eager?
+                    ; If the node is eagerly-updating, give it a chance right now.
                     (if (has-keys? state (:parents node))
                         [(assoc state key ((:fn node) state)) keys]
                         [state (conj keys key)])
