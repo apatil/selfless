@@ -10,9 +10,6 @@
 
 ; TODO: Handle errors in concurrent update.
 
-; TODO: Consider concurrent updates as futures and possibly lazy-maps. For the latter, the 
-; TODO: collating agent is not needed.
-
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
