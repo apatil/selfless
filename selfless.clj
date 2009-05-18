@@ -20,6 +20,9 @@
         ; ===================================
         ; = Destroying state after a change =
         ; ===================================
+        
+        (not-obliv? [key] (not= (-> key flow :timing) :oblivious))
+        
         (forget-children [state key]
             "Notifies the children of a key that it has changed. 
             If they are not eager, sets their values to nil, and 
@@ -29,7 +32,7 @@
             (if (state key)
                 (let [node (flow key)
                     children (:children node)]
-                    (apply forget state children))
+                    (apply forget state (filter not-obliv? children)))
                 state))
 
         (change [state new-substate]
@@ -50,7 +53,7 @@
                         [(assoc state key ((:fn node) state)) keys]
                         [state (conj keys key)])
                     [state (conj keys key)])))
-
+        
         (forget [state & keys]
             "Forgets the flow's value at given keys."
             (let [[new-state new-keys] (reduce eager-update [state []] keys)]
@@ -213,9 +216,7 @@
             ; A function adding key to the children list of a parent.
             add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
-            (if (and parents (not= timing :oblivious))
-                (reduce add-child new-flow parents)
-                new-flow))))
+            (reduce add-child new-flow parents))))
                 
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
