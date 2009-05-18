@@ -28,9 +28,10 @@ or if you don't want to bind the functions to vars you can create them in a map 
 Then you can use the ``with-flosures`` macro, within which the functions ``update``, ``forget`` and ``change`` are understood to pertain to the given flow::
 
     (with-flosures (flosures flow3)
-        [init-state (change {} {:fn1 3})
+        [init-state {:fn1 3}
         new-state (update init-state :fn3 :fn1 :fn2)
-        partial-state (forget init-state :fn2)])
+        partial-state (forget init-state :fn2)
+        altered-state (change new-state {:fn1 3})])
 
 Concurrency
 -----------
