@@ -29,10 +29,10 @@
     (with-flosures flosures3
         [init-state (change {} {:x 3})
         new-state (update init-state :z :x :y :w :v :q)
-        ;spotty-state (forget new-state :z)
-        ;
-        ;newer-state (change {} {:x 11})
-        ;newerer-state (update newer-state :y :w)
+        spotty-state (forget new-state :z)
+        
+        newer-state (change {} {:x 11})
+        newerer-state (update newer-state :y :w)
 
         blocked-change-state (change new-state {:x 11})]
 
