@@ -33,9 +33,9 @@ Then you can use the ``with-flosures`` macro, within which the functions ``updat
         partial-state (forget init-state :fn2)])
     
 If your dataflow contains heavy functions, you can perform three types of concurrent updates: 
-* Receive a state map populated with agents whose values will eventually update
-* Receive a single agent whose state will eventually change to the updated state
-* Receive a future which, when forced, returns the updated state.
+  * Receive a state map populated with agents whose values will eventually update
+  * Receive a single agent whose state will eventually change to the updated state
+  * Receive a future which, when forced, returns the updated state.
     
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     
