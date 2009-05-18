@@ -32,6 +32,8 @@ Then you can use the ``with-flosures`` macro, within which the functions ``updat
         new-state (update init-state :fn3 :fn1 :fn2)
         partial-state (forget init-state :fn2)])
 
+Concurrency
+-----------
     
 If your dataflow contains heavy functions, you can perform three types of concurrent updates.
   1. Receive a state map populated with agents whose values will eventually update, and a fn that starts the update.
@@ -40,7 +42,7 @@ If your dataflow contains heavy functions, you can perform three types of concur
   
 In the first two cases, the update does not start until you call the fn. This gives you the chance to add watchers before the update begins.
     
-Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
+Since the 'library' is purely functional, you can update multiple states (either serially or concurrently) in different threads without causing problems.
     
 License
 -------
