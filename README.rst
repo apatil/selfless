@@ -12,10 +12,10 @@ First, build a dataflow::
     (defn fn3 [fn2] (apply + fn2))
  
     (def flow (add-root {} :fn1))
-    (def flow2 (add-node flow :fn2 fn2 false [:fn1 17 :fn1 2 5]))
-    (def flow3 (add-node flow2 :fn3 fn3 false [:fn2]))
+    (def flow2 (add-node flow :fn2 fn2 {:timing :eager} [:fn1 17 :fn1 2 5]))
+    (def flow3 (add-node flow2 :fn3 fn3 [:fn2]))
 
-The arguments of ``add-node`` are ``[flow key fun block? & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and ``block?`` slots. Blocking nodes do not 'listen' to their parents. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & is blocking.
+The arguments of ``add-node`` are ``[flow key fun & [args]]``, with an optional keyword argument ``:timing``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and timing slots. There are three timings available: eager, lazy (the default) and oblivious, meaning a node not do anything in response to parent updates. ``add-root`` is a version of ``add-node`` that assumes the node has no parents.
 
 Having created the dataflow, you can create functions ``flow3-update``, ``flow3-forget`` and ``flow3-change`` with::
     
@@ -25,26 +25,17 @@ or if you don't want to bind the functions to vars you can create them in a map 
 
     (flosures flow3)
     
-Or you can use the with-flow macro, within which the functions ``update``, ``forget`` and ``change`` are understood to pertain to the given flow::
+Then you can use the ``with-flosures`` macro, within which the functions ``update``, ``forget`` and ``change`` are understood to pertain to the given flow::
 
-    (with-flow flow3
-        exprs...)
-
-Then, seed & updateuate as many states as you want::
-
-    (def init-state (flow3-change {} {:fn1 3}))
-    (def new-state (flow3-update init-state :fn3 :fn1 :fn2))    
-
-    (def init-state (flow3-change {} {:fn1 17}))
-    (def new-state (flow3-update init-state :fn3 :fn1 :fn2))    
-
-You can also start a new state by altering an existing one::
-
-    (def newer-state (flow3-change new-state {:fn1 1}))
+    (with-flosures (flosures flow3)
+        [init-state (change {} {:fn1 3})
+        new-state (update init-state :fn3 :fn1 :fn2)
+        partial-state (forget init-state :fn2)])
     
-or by just pruning an existing one::
-    
-    (def other-state (flow3-forget new-state :fn2 :fn3))
+If your dataflow contains heavy functions, you can perform three types of concurrent updates: 
+* Receive a state map populated with agents whose values will eventually update
+* Receive a single agent whose state will eventually change to the updated state
+* Receive a future which, when forced, returns the updated state.
     
 Since the 'library' is purely functional, you can work with multiple states in different threads without causing problems.
     
