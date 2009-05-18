@@ -36,6 +36,7 @@ Concurrency
 -----------
     
 If your dataflow contains heavy functions, you can perform three types of concurrent updates.
+
   1. Receive a state map populated with agents whose values will eventually update, and a fn that starts the update.
   2. Receive a single agent whose state will eventually change to the updated state, and a fn that starts the update
   3. Receive a future which, when forced, returns the updated state.
