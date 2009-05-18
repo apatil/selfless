@@ -3,11 +3,6 @@
 
 (set! *warn-on-reflection* true)
 
-; TODO: Eagerly-updating nodes. If a parent is changed, should recompute immediately
-; TODO: if possible. Propagate value message to children if value changed, otherwise do
-; TODO: nothing. Useful for 'index' nodes whose value won't usually change even if parents
-; TODO: change.
-
 ; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
 ; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
@@ -26,6 +21,9 @@
         ; ===================================
         ; = Destroying state after a change =
         ; ===================================
+        
+        (not-obliv? [key] (not= (-> key flow :timing) :oblivious))
+        
         (forget-children [state key]
             "Notifies the children of a key that it has changed. 
             If they are not eager, sets their values to nil, and 
@@ -36,7 +34,7 @@
                 (let [node (flow key)
                     children (:children node)]
                         ; If the node is eagerly-updating, give it a chance right now.
-                    (apply forget state children))
+                    (apply forget state (filter not-obliv? children)))
                 state))
 
         (change [state new-substate]
@@ -56,7 +54,7 @@
                         [(assoc state key ((:fn node) state)) keys]
                         [state (conj keys key)])
                     [state (conj keys key)])))
-
+        
         (forget [state & keys]
             "Forgets the flow's value at given keys."
             (let [[new-state new-keys] (reduce eager-update [state []] keys)]
@@ -201,9 +199,7 @@
             ; A function adding key to the children list of a parent.
             add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
             ; Notify parents of new child
-            (if (and parents (not= timing :oblivious))
-                (reduce add-child new-flow parents)
-                new-flow))))
+            (reduce add-child new-flow parents))))
                 
 (defn add-root [flow key] 
     "Adds a root (parentless) node."
