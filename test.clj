@@ -26,7 +26,8 @@
 (def states
     (with-flosures flosures3
     [init-state (change {} {:x 3})
-new-state (update init-state :z)] new-state))
+    new-state (update init-state :z)] 
+    new-state))
         ;
         ;spotty-state (forget new-state :z)
         ;

@@ -12,6 +12,7 @@
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
 (defn has-keys? [m k] (every? identity (map (partial contains? m) k)))
 (defn agent? [x] (instance? clojure.lang.Agent x))
+(defn same-number? [x y] (= (count x) (count y)))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
@@ -45,9 +46,10 @@
             (let [[new-state new-keys] (reduce eager-update [state []] keys)]
                 (apply dissoc (reduce forget-children new-state new-keys) new-keys)))
     
-        ; =====================
-        ; = Sequential update =
-        ; =====================
+        ; ======================
+        ; = Sequential updates =
+        ; ======================
+        
         (eager-update [[state keys] key]
             "Intended to be reduced over [state keys] pair. At end of
             reduce, state will be updated with values of all eager nodes
@@ -80,18 +82,28 @@
         ; = Concurrent updates =
         ; ======================
         
-        (notify [collating-agent msg-map] 
-            "Notifies collating agent of an update."
-            (if collating-agent (send collating-agent msg-record msg-map)))
+        (send-fn [state msg val collating-agent]
+            "Creates a fn to be mapped over keys, which sends messages to 
+            the keys' agents."
+            (fn [key] (send (state key) msg state key val collating-agent)))
+            
+        (send-notify-return [state msg val key collating-agent children]
+            "Wrapped by msg-err and update-and-notify"
+            (do
+                (if collating-agent (send collating-agent msg-record {key val}))
+                (map-now (send-fn state msg val collating-agent) children)
+                val))
         
-        (msg-err [parent-vals state key err collating-agent] 
+        (msg-err [parent-vals state key err collating-agent children] 
             "Action taken by state-managing agents upon encountering an error.
              The error is stored in the agent and propagated to children. It is
              currently not possible to re-raise the error."
-            (do
-                (notify collating-agent {key err})
-                (map-now #(send (state %) msg-err state % err collating-agent) ((flow key) :children))
-                err))
+             (send-notify-return state msg-err {key err} key collating-agent children))
+        
+        (update-and-notify [state collating-agent node new-vals children]
+            "Used by msg-update."
+            (let [new-val ((:fn node) new-vals)]
+                (send-notify-return state msg-update {key new-val} key collating-agent children)))
         
         (msg-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
@@ -99,18 +111,10 @@
             (let [new-vals (merge parent-vals new-pv) 
                     node (flow key)
                     children (:children node)]
-                (if (= (count new-vals) (count (:parents node))) 
+                (if (same-number? new-vals (:parents node)) 
                     ; If the value can be computed, do it.
-                    (try 
-                        (let [new-val ((:fn node) new-vals)  
-                            msg-map {key new-val}] 
-                            (do
-                                ; Notify children of the update.
-                                (map-now #(send (state %) msg-update state % msg-map collating-agent) (:children node))
-                                ; If there is a collating agent, notify it of the update.
-                                (notify collating-agent msg-map)
-                                new-val))
-                        (catch Exception err (msg-err parent-vals state key err collating-agent)))
+                    (try (update-and-notify state collating-agent node new-vals children)
+                        (catch Exception err (msg-err parent-vals state key err collating-agent children)))
                     ; Otherwise just record the parent's value.
                     new-vals)))
         
@@ -133,7 +137,7 @@
                     ; Update the state with new agents at this node and at the parent nodes
                     [(assoc state key (agent parent-vals)) 
                     ; If this is a root node, add it to the roots.
-                    (if (= (count parent-vals) (count parents)) (conj roots key) roots)])))
+                    (if (same-number? parent-vals parents) (conj roots key) roots)])))
         
         (create-agents [state & keys-to-update]
             "Returns a state with agents in the keys that need to be updated,
@@ -143,7 +147,7 @@
         
         (start-c-update [state roots collating-agent] 
             "Used by the concurrent updates."
-            (fn [] (map-now #(send (state %) msg-update state % {} collating-agent) roots)))
+            (fn [] (map-now (send-fn state key msg-update {} collating-agent) roots)))
             
         (concurrent-update [state & keys-to-update]
             "Returns a fn that starts the update, and the new state with agents
