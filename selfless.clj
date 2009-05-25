@@ -7,6 +7,7 @@
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
 ; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
 
+(defn pre [x] (do (print x "\n") x))
 
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
@@ -23,46 +24,45 @@
         ; ===================================
         
         (not-obliv? [key] (not= (-> key flow :timing) :oblivious))
+        (eager? [key] (= (-> key flow :timing) :eager))
+        (eager-children [key] (filter eager? (:children (flow key))))
         
         (forget-children [state key]
             "Notifies the children of a key that it has changed. 
             If they are not eager, sets their values to nil, and 
-            propagates the 'message' to their children.
-            If they are eager, attempts to recompute their values
-            before taking the above action."
+            propagates the 'message' to their children. If they 
+            are oblivious, no action is taken."
             (if (state key)
-                (let [node (flow key)
-                    children (:children node)]
-                    (apply forget state (filter not-obliv? children)))
+                (apply forget state (filter not-obliv? (:children (flow key))))
                 state))
 
         (change [state new-substate]
             "Sets the flow's value at certain keys to new values.
             Forgets children's values."
-            (merge (reduce forget-children state (keys new-substate)) new-substate))
+            (let [keys (keys new-substate)]
+                (reduce eager-update-children
+                    (merge (reduce forget-children state keys) new-substate) 
+                    keys)))
         
         (forget [state & keys]
             "Forgets the flow's value at given keys."
-            (let [[new-state new-keys] (reduce eager-update [state []] keys)]
-                (apply dissoc (reduce forget-children new-state new-keys) new-keys)))
+            (apply dissoc (reduce forget-children state keys) keys))
     
         ; ======================
         ; = Sequential updates =
         ; ======================
         
-        (eager-update [[state keys] key]
-            "Intended to be reduced over [state keys] pair. At end of
-            reduce, state will be updated with values of all eager nodes
-            that were ready to compute, and keys will contain keys of all 
-            nodes that did not get updated."
-            (let [node (flow key)
-                eager? (= (:timing node) :eager)]
-                (if eager?
-                    ; If the node is eagerly-updating, give it a chance right now.
-                    (if (has-keys? state (:parents node))
-                        [(assoc state key ((:fn node) state)) keys]
-                        [state (conj keys key)])
-                    [state (conj keys key)])))
+        (eager-update-children [state key]
+            "Eagerly updates the children of the given keys."
+            (reduce eager-update state (eager-children key)))
+        
+        (eager-update [state key]
+            "Attempts to eagerly update the given key. If successful,
+            attempts to eagerly update the children."
+            (let [node (flow key)]
+                (if (or (state key) (not (has-keys? state (:parents node))))
+                    state
+                    (eager-update-children (assoc state key ((:fn node) state)) key))))
         
         (update-node [state key]
             "Updates the state with the value corresponding to key,
@@ -186,26 +186,27 @@
         :a-update agent-update 
         :f-update future-update}))
 
-(defn add-node [flow key fun {:keys [timing] :or {timing :lazy}} & [args]]
+(defn- assoc-node- [timing flow key fun & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
-    (if (flow key) 
-        (throw (Exception. (.concat "Node key already taken: " (name key))))
-        (let [
-            ; Parents are nodes in the flow
-            parents (set (filter (fn [key] (flow key)) args))   
-            ; A partially-applied version of the function that takes nodes only
-            pfun #(apply fun (replace % args))                  
-            ; The flow, with the new function added
-            new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})
-            ; A function adding key to the children list of a parent.
-            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
-            ; Notify parents of new child
-            (reduce add-child new-flow parents))))
-                
-(defn add-root [flow key] 
-    "Adds a root (parentless) node."
-    (add-node flow key (fn []) true))
+        (if (flow key) 
+            (throw (Exception. (.concat "Node key already taken: " (name key))))
+            (let [
+                args (if args args [])
+                ; Parents are nodes in the flow
+                parents (set (filter (fn [key] (flow key)) args))   
+                ; A partially-applied version of the function that takes nodes only
+                pfun #(apply fun (replace % args))                  
+                ; The flow, with the new function added
+                new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})
+                ; A function adding key to the children list of a parent.
+                add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
+                ; Notify parents of new child
+                (reduce add-child new-flow parents))))
+
+(def assoc-lazy (partial assoc-node- :lazy))
+(def assoc-eager (partial assoc-node- :eager))
+(def assoc-oblivious (partial assoc-node- :oblivious))
     
 (defmacro def-flosures [flow]
     "Binds the flow's 'methods' to vars."
