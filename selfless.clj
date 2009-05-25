@@ -23,9 +23,9 @@
         ; = Destroying state after a change =
         ; ===================================
         
-        (not-obliv? [key] (not= (-> key flow :timing) :oblivious))
-        (eager? [key] (= (-> key flow :timing) :eager))
-        (eager-children [key] (filter eager? (:children (flow key))))
+        (non-oblivious-children [key] (filter #(not= (-> % flow :timing) :oblivious) (:children (flow key))))
+        (eager-children [key] (filter #(= (-> % flow :timing) :eager) (:children (flow key))))
+        (compute [state key] (assoc state key ((:fn (flow key)) state)))
         
         (forget-children [state key]
             "Notifies the children of a key that it has changed. 
@@ -33,7 +33,7 @@
             propagates the 'message' to their children. If they 
             are oblivious, no action is taken."
             (if (state key)
-                (apply forget state (filter not-obliv? (:children (flow key))))
+                (apply forget state (non-oblivious-children key))
                 state))
 
         (change [state new-substate]
@@ -59,19 +59,16 @@
         (eager-update [state key]
             "Attempts to eagerly update the given key. If successful,
             attempts to eagerly update the children."
-            (let [node (flow key)]
-                (if (or (state key) (not (has-keys? state (:parents node))))
-                    state
-                    (eager-update-children (assoc state key ((:fn node) state)) key))))
+            (if (or (state key) (not (has-keys? state (:parents (flow key)))))
+                state
+                (eager-update-children (compute state key) key)))
         
         (update-node [state key]
             "Updates the state with the value corresponding to key,
             and any ancestral values necessary to compute it."
-            (if (state key) state
-                (let [node (flow key)
-                    parents (:parents node)
-                    new-state (reduce update-node state parents)]
-                (assoc new-state key ((:fn node) new-state)))))        
+            (if (state key) 
+                state
+                (compute (reduce update-node state (:parents (flow key))) key)))        
         
         (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
