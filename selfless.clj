@@ -1,7 +1,7 @@
 (ns selfless
-    (:use clojure.contrib.graph clojure.contrib.monads))
+    (:use clojure.contrib.graph))
 
-(set! *warn-on-reflection* true)
+;(set! *warn-on-reflection* true)
 
 ; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
@@ -12,7 +12,6 @@
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
 (defn has-keys? [m k] (every? identity (map (partial contains? m) k)))
-(defn agent? [x] (instance? clojure.lang.Agent x))
 (defn same-number? [x y] (= (count x) (count y)))
 
 (defn flosures [flow]
@@ -23,52 +22,57 @@
         ; = Destroying state after a change =
         ; ===================================
         
-        (non-oblivious-children [key] (filter #(not= (-> % flow :timing) :oblivious) (:children (flow key))))
-        (eager-children [key] (filter #(= (-> % flow :timing) :eager) (:children (flow key))))
-        (compute [state key] (assoc state key ((:fn (flow key)) state)))
+        (eager? [key] (= (-> key flow :timing) :eager))
+        (obliv? [key] (= (-> key flow :timing) :oblivious))
+        (key-parents [key] (-> key flow :parents))
+        (key-children [state key] (filter state (-> key flow :children)))
+        (compute [state key] ((:fn (flow key)) state))
         
-        (forget-children [state key]
-            "Notifies the children of a key that it has changed. 
-            If they are not eager, sets their values to nil, and 
-            propagates the 'message' to their children. If they 
-            are oblivious, no action is taken."
-            (if (state key)
-                (apply forget state (non-oblivious-children key))
-                state))
-
-        (change [state new-substate]
-            "Sets the flow's value at certain keys to new values.
-            Forgets children's values."
-            (let [keys (keys new-substate)]
-                (reduce eager-update-children
-                    (merge (reduce forget-children state keys) new-substate) 
-                    keys)))
-        
+        (update-or-forget-children [protected-keys state key] 
+            (reduce (update-or-forget protected-keys) state (key-children state key)))
+            
         (forget [state & keys]
-            "Forgets the flow's value at given keys."
-            (apply dissoc (reduce forget-children state keys) keys))
+            (let [k (set (filter state keys))]
+                (reduce (partial update-or-forget-children k) (apply dissoc state k) k)))
+            
+        (update-or-forget [protected-keys]
+            (fn [state key]
+                (cond
+                    ; If the key is already being dealt with, do nothing.
+                    (protected-keys key) state
+                    ; If the key is oblivious, do nothing.
+                    (obliv? key) state
+                    ; If the key is eager, try to update it.
+                    (eager? key) (try-eager-update protected-keys state key)
+                    ; Otherwise, get rid of it and its children.
+                    true (update-or-forget-children protected-keys (dissoc state key) (key-children state key)))))
+        
+        (change [state new-substate]
+            (let [k (set (filter state (keys new-substate)))]
+                (reduce (partial update-or-forget-children k) (merge state new-substate) k)))
     
         ; ======================
         ; = Sequential updates =
         ; ======================
         
-        (eager-update-children [state key]
-            "Eagerly updates the children of the given keys."
-            (reduce eager-update state (eager-children key)))
-        
-        (eager-update [state key]
-            "Attempts to eagerly update the given key. If successful,
-            attempts to eagerly update the children."
-            (if (or (state key) (not (has-keys? state (:parents (flow key)))))
-                state
-                (eager-update-children (compute state key) key)))
+        (try-eager-update [protected-keys state key]
+            (if (has-keys? state (key-parents key))
+                ; If the parents are all there, try the computation.
+                (let [new-val (compute state key)]
+                    (if (= new-val (state key))
+                        ; If the value is unchanged, do nothing.
+                        state
+                        ; If the value has changed, update the value but dissoc the children.
+                        (update-or-forget-children protected-keys (assoc state key new-val) key)))
+                ; If the parents are not there, dissoc the node and the children.
+                (update-or-forget-children protected-keys state key)))
         
         (update-node [state key]
             "Updates the state with the value corresponding to key,
             and any ancestral values necessary to compute it."
             (if (state key) 
                 state
-                (compute (reduce update-node state (:parents (flow key))) key)))        
+                (assoc state key (compute (reduce update-node state (:parents (flow key))) key))))        
         
         (update-nodes [state & keys]
             "Evaluates the state at given keys. Propagates message of 
@@ -177,7 +181,7 @@
                     (delay (do (.await latch) (@a 0)))))
         ] 
         {:update update-nodes 
-        :forget forget 
+        :forget forget
         :change change 
         :c-update concurrent-update 
         :a-update agent-update 
