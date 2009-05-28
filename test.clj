@@ -37,12 +37,12 @@
 
     [new-state spotty-state newer-state blocked-change-state]))
     
-;(with-flosures flosures6
-;    [[fa a] (a-update {:x 3} :z :x :y :w :v :q)
-;    [fc c] (c-update {:x 3} :z :x :y :w :v :q)
-;    d (f-update {:x 3} :z :x :y :w :v :q)]
-;    (def fa fa)
-;    (def fc fc)
-;    (def a a)
-;    (def c c)  
-;    (def d d))
+(with-flosures flosures6
+    [[fa a] (a-update {:x 3} :z :x :y :w :v :q)
+    [fc c] (c-update {:x 3} :z :x :y :w :v :q)
+    d (f-update {:x 3} :z :x :y :w :v :q)]
+    (def fa fa)
+    (def fc fc)
+    (def a a)
+    (def c c)  
+    (def d d))

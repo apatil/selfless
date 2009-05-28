@@ -92,19 +92,19 @@
             "Wrapped by msg-err and update-and-notify"
             (do
                 (if collating-agent (send collating-agent msg-record {key val}))
-                (map-now (send-fn state msg val collating-agent) children)
+                (map-now (send-fn state msg {key val} collating-agent) children)
                 val))
         
         (msg-err [parent-vals state key err collating-agent children] 
             "Action taken by state-managing agents upon encountering an error.
              The error is stored in the agent and propagated to children. It is
              currently not possible to re-raise the error."
-             (send-notify-return state msg-err {key err} key collating-agent children))
+             (send-notify-return state msg-err err key collating-agent children))
         
-        (update-and-notify [state collating-agent node new-vals children]
+        (update-and-notify [state collating-agent key node new-vals children]
             "Used by msg-update."
             (let [new-val ((:fn node) new-vals)]
-                (send-notify-return state msg-update {key new-val} key collating-agent children)))
+                (send-notify-return state msg-update new-val key collating-agent children)))
         
         (msg-update [parent-vals state key new-pv collating-agent]
             "A message that a parent can send to a child when it has 
@@ -114,7 +114,7 @@
                     children (:children node)]
                 (if (same-number? new-vals (:parents node)) 
                     ; If the value can be computed, do it.
-                    (try (update-and-notify state collating-agent node new-vals children)
+                    (try (update-and-notify state collating-agent key node new-vals children)
                         (catch Exception err (msg-err parent-vals state key err collating-agent children)))
                     ; Otherwise just record the parent's value.
                     new-vals)))
@@ -148,7 +148,7 @@
         
         (start-c-update [state roots collating-agent] 
             "Used by the concurrent updates."
-            (fn [] (map-now (send-fn state key msg-update {} collating-agent) roots)))
+            (fn [] (map-now (send-fn state msg-update {} collating-agent) roots)))
             
         (concurrent-update [state & keys-to-update]
             "Returns a fn that starts the update, and the new state with agents
