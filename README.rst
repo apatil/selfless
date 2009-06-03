@@ -1,7 +1,10 @@
-selfless : Stateless, lazy dataflow for Clojure
-===============================================
+:Date: 3 June 2009
+:Author: Anand Patil
+:Contact: anand.prabhakar.patil@gmail.com
+:Copyright: Anand Patil, 2009.
+:License: See LICENSE
 
-Separates the dataflow model and the state, so many states can be updated concurrently.
+Selfless provides stateless, lazy dataflow for Clojure. It separates the dataflow model and the state, so many states can be updated concurrently.
 
 Usage
 -----
