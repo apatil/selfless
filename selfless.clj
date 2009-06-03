@@ -29,13 +29,17 @@
         (compute [state key] ((:fn (flow key)) state))
         
         (update-or-forget-children [protected-keys state key] 
+            "Utility fn used to propagate update messages to children."
             (reduce (update-or-forget protected-keys) state (key-children state key)))
             
         (forget [state & keys]
+            "User-callable fn used to dissoc certain keys from a state."
             (let [k (set (filter state keys))]
                 (reduce (partial update-or-forget-children k) (apply dissoc state k) k)))
             
         (update-or-forget [protected-keys]
+            "Utility fn that decides what to do with a key when one of its parents
+            has updated."
             (fn [state key]
                 (cond
                     ; If the key is already being dealt with, do nothing.
@@ -48,6 +52,7 @@
                     true (update-or-forget-children protected-keys (dissoc state key) (key-children state key)))))
         
         (change [state new-substate]
+            "User-callable fn used to compute a state's value at certain keys."
             (let [k (set (filter state (keys new-substate)))]
                 (reduce (partial update-or-forget-children k) (merge state new-substate) k)))
     
@@ -56,6 +61,7 @@
         ; ======================
         
         (try-eager-update [protected-keys state key]
+            "Utility fn used to attempt to update an eager node."
             (if (has-keys? state (key-parents key))
                 ; If the parents are all there, try the computation.
                 (let [new-val (compute state key)]
@@ -187,7 +193,7 @@
         :a-update agent-update 
         :f-update future-update}))
 
-(defn- assoc-node- [timing flow key fun & [args]]
+(defn assoc-node [timing flow key fun & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
         (if (flow key) 
@@ -205,9 +211,9 @@
                 ; Notify parents of new child
                 (reduce add-child new-flow parents))))
 
-(def assoc-lazy (partial assoc-node- :lazy))
-(def assoc-eager (partial assoc-node- :eager))
-(def assoc-oblivious (partial assoc-node- :oblivious))
+(def assoc-lazy (partial assoc-node :lazy))
+(def assoc-eager (partial assoc-node :eager))
+(def assoc-oblivious (partial assoc-node :oblivious))
     
 (defmacro def-flosures [flow]
     "Binds the flow's 'methods' to vars."
