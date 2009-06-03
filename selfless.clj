@@ -7,8 +7,6 @@
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
 ; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
 
-(defn pre [x] (do (print x "\n") x))
-
 (defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
 (defn map-now [fn coll] (doseq [x coll] (fn x)))
 (defn has-keys? [m k] (every? identity (map (partial contains? m) k)))
