@@ -48,8 +48,3 @@ If your dataflow contains heavy functions, you can perform three types of concur
 In the first two cases, the update does not start until you call the fn. This gives you the chance to add watchers before the update begins.
     
 Since the 'library' is purely functional, you can update multiple states (either serially or concurrently) in different threads without causing problems.
-    
-License
--------
-
-Copyright (c) Anand Patil, 2009. Licensed under Creative Commons BY-SA, see LICENSE.

@@ -175,7 +175,7 @@
         (future-update [state & keys-to-update]
             "Does a concurrent update of the given keys. Returns a delay which, when
             forced, returns the updated state."
-            (let [[s a] (apply agent-update state keys-to-update)
+            (let [ [s a] (apply agent-update state keys-to-update)
                     ; Create a countdown latch and a watcher that opens the latch when the state is ready.
                     latch (java.util.concurrent.CountDownLatch. 1)
                     w (add-watch a latch (fn [#^java.util.concurrent.CountDownLatch latch r old-v new-v] 
@@ -183,8 +183,10 @@
                     ; Start the update.
                     nothing (s)]
                     (delay (do (.await latch) (@a 0)))))
+                    
         ] 
-        {:update update-nodes 
+        {:flow flow
+        :update update-nodes 
         :forget forget
         :change change 
         :c-update concurrent-update 
