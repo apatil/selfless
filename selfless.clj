@@ -1,12 +1,14 @@
 (ns selfless
     (:use clojure.contrib.graph)
-    (:use clojure.parallel))
+    (:use clojure.par))
 
 ;(set! *warn-on-reflection* true)
-;TODO: Get fj-pmap to work. It's not handing off properly. 
 
-(defn fj-pmap [f coll] (pvec (par coll :map f)))
-(defn force-state [state] (zipmap (keys state) (pmap force (vals state))))
+; TODO: Why is this slower using pvmap than pmap?
+(defn vpvmap [f c] (pvmap f (vec c)))
+;(def vpvmap pmap)
+
+(defn force-state [state] (zipmap (keys state) (vpvmap force (vals state))))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
@@ -70,7 +72,7 @@
             ; Parents are nodes in the flow
             parents (set (filter (fn [key] (flow key)) args))   
             ; A version of the function that evaluates arguments in parallel.
-            pfun #(apply fun (pmap force (replace % args)))
+            pfun #(apply fun (vpvmap force (replace % args)))
             ;pfun identity
             ; The flow, with the new function added
             new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})

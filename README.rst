@@ -6,6 +6,8 @@
 
 Selfless provides stateless, lazy dataflow for Clojure. It separates the dataflow model and the state, so many states can be updated concurrently.
 
+**NOTE**: The 'delay' branch (which you are using) requires the par branch of clojure, available from http://github.com/richhickey/clojure/tree/par. To build it, you'll need Rich Hickey's build of the jsr166 from http://cloud.github.com/downloads/richhickey/clojure/jsr166y.jar on your classpath.
+
 Usage
 -----
 
