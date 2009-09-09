@@ -39,12 +39,4 @@ Then you can use the ``with-flosures`` macro, within which the functions ``init`
 Concurrency
 -----------
     
-If your dataflow contains heavy functions, you can perform three types of concurrent updates.
-
-  1. Receive a state map populated with agents whose values will eventually update, and a fn that starts the update.
-  2. Receive a single agent whose state will eventually change to the updated state, and a fn that starts the update
-  3. Receive a future which, when forced, returns the updated state.
-  
-In the first two cases, the update does not start until you call the fn. This gives you the chance to add watchers before the update begins.
-    
-Since the 'library' is purely functional, you can update multiple states (either serially or concurrently) in different threads without causing problems.
+Nodes' values are wrapped in delays. When you force a value, it forces its parents' values, and so on. Evaluations are done concurrently (using ``pmap``) where possible. The ``force-state`` function evaluates the entire state and strips away the delays.
