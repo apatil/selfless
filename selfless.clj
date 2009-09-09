@@ -8,18 +8,17 @@
 ; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
 ; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
 
-(defn zipmapmap [fn coll] (zipmap coll (map fn coll)))
-(defn map-now [fn coll] (doseq [x coll] (fn x)))
-(defn has-keys? [m k] (every? identity (map (partial contains? m) k)))
-(defn same-number? [x y] (= (count x) (count y)))
+(defn force-state [state] (zipmap (keys state) (pmap force (vals state))))
+
+(defn inline-print [x] (do (print x "\n") x))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
     (letfn [
         
         (obliv? [key] (= (-> key flow :timing) :oblivious))
-        (key-parents [key] (-> key flow :parents))
-        (key-children [key] (-> key flow :children))
+        (parents [key] (-> key flow :parents))
+        (children [key] (-> key flow :children))
         
         ; ===================================
         ; = Destroying state after a change =
@@ -31,7 +30,7 @@
         ; A version that does NOT check. Always calls the version that checks.
         (forget- [state key] 
             (if (state key)
-                (reduce forget-- (dissoc state key) (key-children key))
+                (reduce forget-- (dissoc state key) (children key))
                 state))
         
         ; A user-callable version. Will not check for obliviousness.
@@ -50,15 +49,20 @@
         
         (add-delay [state key] 
             (if (state key) state
-                (let [state- (reduce add-delay state (key-parents key))]
-                    (assoc state- key (delay ((:fn (flow key)) state-))))))           
+                (let [state- (reduce add-delay state (parents key))]
+                    (assoc state- key (delay ((:fn (flow key)) state-))))))   
+                
         (complete [state] (reduce add-delay state (keys flow)))
     
         ] 
         {:flow flow
         :new #(complete {})
         :forget (comp complete forget)
-        :change (comp complete change)}))
+        :change (comp complete change)
+        :init (comp complete (partial change {}))
+        :obliv? obliv?
+        :parents parents
+        :children children}))
 
 (defn assoc-node- [timing flow key fun & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
@@ -70,7 +74,8 @@
             ; Parents are nodes in the flow
             parents (set (filter (fn [key] (flow key)) args))   
             ; A version of the function that evaluates arguments in parallel.
-            pfun #(apply fun (pmap force (replace % args)))                  
+            pfun #(apply fun (pmap force (replace % args)))
+            ;pfun identity
             ; The flow, with the new function added
             new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})
             ; A function adding key to the children list of a parent.
@@ -79,6 +84,7 @@
             (reduce add-child new-flow parents))))
 
 (def assoc-node (partial assoc-node- :lazy))
+(defn assoc-root [flow key] (assoc-node- :lazy flow key (fn [& args] (throw (Exception. (.concat "Root node uninitialized: " (name key))))) []))
 (def assoc-oblivious (partial assoc-node- :oblivious))
     
 (defmacro def-flosures [flow]
@@ -92,7 +98,8 @@
     functions in context of flow."
     `(let [~'new-state (~flosures :new)
             ~'forget (~flosures :forget)
-            ~'change (~flosures :change)]
+            ~'change (~flosures :change)
+            ~'init (~flosures :init)]
             (let ~bindings ~@exprs)))
                 
 (defn flow-graph [dir flow]
