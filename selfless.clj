@@ -90,8 +90,9 @@
 (defmacro def-flosures [flow]
     "Binds the flow's 'methods' to vars."
     (let [sym-dash (.concat (name flow) "-")
-        name-fn #(.concat sym-dash (name %))]
-    (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) (meta (eval flow)))))
+        name-fn #(.concat sym-dash (name %))
+        flosures (flosures flow)]
+    (cons 'do (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) flosures))))
     
 (defmacro with-flosures [flosures bindings & exprs] 
     "Like let-bindings, but provides update, forget and change
