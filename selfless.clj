@@ -91,20 +91,27 @@
     "Binds the flow's 'methods' to vars."
     (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))
-        flosures (flosures flow)]
+        flosures (-> flow eval flosures)]
     (cons 'do (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) flosures))))
-    
+
 (defmacro with-flosures [flosures bindings & exprs] 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
-    `(let [~'new-state (~flosures :new-state)
-            ~'forget (~flosures :forget)
-            ~'change (~flosures :change)
-            ~'init (~flosures :init)
-            ~'obliv? (~flosures :obliv?)
-            ~'parents (~flosures :parents)
-            ~'children (~flosures :children)]
-            (let ~bindings ~@exprs)))
+    (let [f (eval flosures)
+            v (vec (mapcat (fn [[key val]] [(symbol (name key)) (apply list [flosures key])]) f))]
+        `(let ~v (let ~bindings ~@exprs))))
+    
+;(defmacro with-flosures [flosures bindings & exprs] 
+;    "Like let-bindings, but provides update, forget and change
+;    functions in context of flow."
+;    `(let [~'new-state (~flosures :new-state)
+;            ~'forget (~flosures :forget)
+;            ~'change (~flosures :change)
+;            ~'init (~flosures :init)
+;            ~'obliv? (~flosures :obliv?)
+;            ~'parents (~flosures :parents)
+;            ~'children (~flosures :children)]
+;            (let ~bindings ~@exprs)))
                 
 (defn flow-graph [dir flow]
     "Returns a clojure-contrib graph corresponding to the given flow."
