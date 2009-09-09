@@ -3,14 +3,10 @@
     (:use clojure.parallel))
 
 ;(set! *warn-on-reflection* true)
+;TODO: Get fj-pmap to work. It's not handing off properly. 
 
-; TODO: Don't use the state monad in with-flow. You want to make the state explicit at all times.
-; TODO: You don't need to worry about preferred errors at this level. ZeroProbabilities 
-; TODO: will always happen at leaf nodes, so the logp-accessor fn can deal with them.
-
+(defn fj-pmap [f coll] (pvec (par coll :map f)))
 (defn force-state [state] (zipmap (keys state) (pmap force (vals state))))
-
-(defn inline-print [x] (do (print x "\n") x))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
@@ -56,7 +52,7 @@
     
         ] 
         {:flow flow
-        :new #(complete {})
+        :new-state #(complete {})
         :forget (comp complete forget)
         :change (comp complete change)
         :init (comp complete (partial change {}))
@@ -84,8 +80,10 @@
             (reduce add-child new-flow parents))))
 
 (def assoc-node (partial assoc-node- :lazy))
-(defn assoc-root [flow key] (assoc-node- :lazy flow key (fn [& args] (throw (Exception. (.concat "Root node uninitialized: " (name key))))) []))
 (def assoc-oblivious (partial assoc-node- :oblivious))
+(defn root-fn [] 
+    (throw (Exception. (.concat "Root node uninitialized: " (name key)))))
+(defn assoc-root [flow key] (assoc-node- :lazy flow key root-fn []))
     
 (defmacro def-flosures [flow]
     "Binds the flow's 'methods' to vars."
@@ -96,10 +94,13 @@
 (defmacro with-flosures [flosures bindings & exprs] 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
-    `(let [~'new-state (~flosures :new)
+    `(let [~'new-state (~flosures :new-state)
             ~'forget (~flosures :forget)
             ~'change (~flosures :change)
-            ~'init (~flosures :init)]
+            ~'init (~flosures :init)
+            ~'obliv? (~flosures :obliv?)
+            ~'parents (~flosures :parents)
+            ~'children (~flosures :children)]
             (let ~bindings ~@exprs)))
                 
 (defn flow-graph [dir flow]
