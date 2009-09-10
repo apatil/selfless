@@ -94,12 +94,12 @@
         flosures (-> flow eval flosures)]
     (cons 'do (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) flosures))))
 
-(defmacro with-flosures [flosures bindings & exprs] 
+(defmacro with-flosures [flosures & exprs] 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
     (let [f (eval flosures)
-            v (vec (mapcat (fn [[key val]] [(symbol (name key)) (apply list [flosures key])]) f))]
-        `(let ~v (let ~bindings ~@exprs))))
+            v (vec (mapcat (fn [[key val]] [(symbol (name key)) (list flosures key)]) f))]
+        `(let ~v ~@exprs)))
     
 ;(defmacro with-flosures [flosures bindings & exprs] 
 ;    "Like let-bindings, but provides update, forget and change

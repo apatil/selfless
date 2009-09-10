@@ -30,13 +30,15 @@ or if you don't want to bind the functions to vars you can create them in a map 
 
     (flosures flow3)
     
-Then you can use the ``with-flosures`` macro, within which the functions ``init``, ``forget`` and ``change`` are understood to pertain to the given flow::
+Then you can use the ``with-flosures`` macro, which creates a context within which the functions ``init``, ``forget`` and ``change`` are understood to pertain to the given flow::
 
     (with-flosures (flosures flow3)
-        [init-state (init {:fn1 3})
-        init-vals (force-state init-state)
-        partial-state (forget init-state :fn2)
-        altered-state (change new-state {:fn1 3})])
+        (let
+            [init-state (init {:fn1 3})
+            init-vals (force-state init-state)
+            partial-state (forget init-state :fn2)
+            altered-state (change new-state {:fn1 3})]
+            [init-state init-vals altered-state]))
 
 Concurrency
 -----------

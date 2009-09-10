@@ -19,15 +19,16 @@
 (def flow5 (assoc-oblivious flow4 :v fn4 [:x :z]))
 (def flow6 (assoc-node flow5 :q identity [:x]))
 
-(def states
-    (with-flosures (flosures flow6)
-    [init-state (init {:x 3})
-    spotty-state (forget init-state :z)
-    newer-state (change {} {:x 11})
-    blocked-change-state (change init-state {:x 11})]
+
+(with-flosures (flosures flow6)
+    (def states
+        (let
+            [init-state (init {:x 3})
+            spotty-state (forget init-state :z)
+            newer-state (change {} {:x 11})
+            blocked-change-state (change init-state {:x 11})]    
+        [init-state spotty-state newer-state blocked-change-state]))
     
-    [init-state spotty-state newer-state blocked-change-state]))
-    
-; Takes the same time as three 100-ms sleeps, not four!
-(time (print (force-state (states 2))))
+    ; Takes the same time as three 100-ms sleeps, not four!
+    (time (print (force-state (states 2)))))
     
