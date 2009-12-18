@@ -1,12 +1,12 @@
 (ns selfless
-    (:use clojure.contrib.graph)
-    (:use clojure.par))
+(:use clojure.contrib.graph))
+    ; (:use clojure.par))
 
 ;(set! *warn-on-reflection* true)
 
 ; TODO: Why is this slower using pvmap than pmap?
-(defn vpvmap [f c] (pvmap f (vec c)))
-;(def vpvmap pmap)
+; (defn vpvmap [f c] (pvmap f (vec c)))
+(def vpvmap pmap)
 
 (defn force-state [state] (zipmap (keys state) (vpvmap force (vals state))))
 
@@ -100,18 +100,6 @@
     (let [f (eval flosures)
             v (vec (mapcat (fn [[key val]] [(symbol (name key)) (list flosures key)]) f))]
         `(let ~v ~@exprs)))
-    
-;(defmacro with-flosures [flosures bindings & exprs] 
-;    "Like let-bindings, but provides update, forget and change
-;    functions in context of flow."
-;    `(let [~'new-state (~flosures :new-state)
-;            ~'forget (~flosures :forget)
-;            ~'change (~flosures :change)
-;            ~'init (~flosures :init)
-;            ~'obliv? (~flosures :obliv?)
-;            ~'parents (~flosures :parents)
-;            ~'children (~flosures :children)]
-;            (let ~bindings ~@exprs)))
                 
 (defn flow-graph [dir flow]
     "Returns a clojure-contrib graph corresponding to the given flow."
