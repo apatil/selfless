@@ -1,6 +1,7 @@
 (load-file "selfless.clj")
 (refer 'selfless)
-(use 'clojure.contrib.stacktrace)
+(use 'clojure.stacktrace)
+(use 'clojure.inspector)
 
 ; ========
 ; = Test =
@@ -21,6 +22,7 @@
 
 
 (with-flosures (flosures flow6)
+    (inspect children)
     (def states
         (let
             [init-state (init {:x 3})

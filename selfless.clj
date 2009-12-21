@@ -1,55 +1,94 @@
 (ns selfless
-(:use clojure.contrib.graph))
-    ; (:use clojure.par))
+    (:use clojure.contrib.graph))
 
-;(set! *warn-on-reflection* true)
+;;(set! *warn-on-reflection* true)
 
-; TODO: Why is this slower using pvmap than pmap?
+;; TODO: Why is this slower using pvmap than pmap?
 ; (defn vpvmap [f c] (pvmap f (vec c)))
-(def vpvmap pmap)
+;; (def vpvmap pmap)
+(def vpvmap map)
 
-(defn force-state [state] (zipmap (keys state) (vpvmap force (vals state))))
+(defn force-state [state] 
+    "Forces evaluation of all the keys in the state."
+    (zipmap (keys state) (vpvmap force (vals state))))
 
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
+
+    ;; Store the children of all the nodes in a map up front.
+    (let [children (reduce 
+                        (fn [cm [c p]] (assoc cm p (conj (cm p) c)))
+                        (zipmap (keys flow) (repeat #{}))
+                        ;; Reduce over all the parent-child pairs in the flow
+                        (for [c (keys flow) p (-> c flow :parents)] [c p]))]
+    
     (letfn [
         
-        (obliv? [key] (= (-> key flow :timing) :oblivious))
+        (timing [key] (-> key flow :timing))
+        (obliv? [key] (= (timing key) :oblivious))
+        (eager? [key] (=  (timing key) :eager))
         (parents [key] (-> key flow :parents))
-        (children [key] (-> key flow :children))
         
-        ; ===================================
-        ; = Destroying state after a change =
-        ; ===================================
+        ;; ===================================
+        ;; = Destroying state after a change =
+        ;; ===================================
+        
+        ;; A version that checks for obliviousness & eagerness
+        (forget-- [state key] (cond 
+            ;; If oblivious, do not dissociate the key.
+            (obliv? key) state
+            ;; If eager, re-evaluate the key if possible. If it has 
+            ;; not changed, don't forget it or its children.
+            (eager? key) (if (= (state key) (maybe-compute-key state key)) 
+                            state 
+                            (forget- state key))
+            ;; If lazy, forget the key and its children.
+            true (forget- state key)))
 
-        ; A version that checks for obliviousness
-        (forget-- [state key] (if (obliv? key) state (forget- state key)))
-        
-        ; A version that does NOT check. Always calls the version that checks.
+        ;; A version that does NOT check. Always calls the version that checks.
         (forget- [state key] 
+            ;; If this key is stil present in the state, dissociate it and forget 
+            ;; its children.
             (if (state key)
                 (reduce forget-- (dissoc state key) (children key))
                 state))
-        
-        ; A user-callable version. Will not check for obliviousness.
+
+        ;; A user-callable version. Will not check for obliviousness.
         (forget [state & keys]
             "User-callable fn used to dissoc certain keys from a state."
             (reduce forget- state keys))
         
-        ; Will not check for obliviousness.
+        ;; Will not check for obliviousness.
         (change [state new-substate]
             "User-callable fn used to change a state's value at certain keys."
             (merge (reduce forget- state (keys new-substate)) new-substate))
                 
-        ; =======================
-        ; = Creating new states =
-        ; =======================
+        ;; =======================
+        ;; = Creating new states =
+        ;; =======================
         
+        ;; Computes the value at the key.
+        (compute-key [key state] ((:fn (flow key)) state))
+
+        ;; Whether the state has all the parents of the key.
+        (has-all-parents [key state]
+            (let [p (parents key)]
+                (= (count p) (count select-keys state p))))
+
+        ;; Only computes the value at the key if all its parents are present.
+        (maybe-compute-key [key state]
+            (if (has-all-parents key state) (compute-key key state) nil))
+
+        ;; Adds a key's value to the state, wrapped in a delay.
         (add-delay [state key] 
             (if (state key) state
                 (let [state- (reduce add-delay state (parents key))]
-                    (assoc state- key (delay ((:fn (flow key)) state-))))))   
-                
+                    (assoc state- key 
+                        (if (eager? key)
+                            (compute-key key state-)
+                            (delay (compute-key key state-)))))))   
+        
+        ;; Adds all keys' values to the state, wrapped in delays.        
         (complete [state] (reduce add-delay state (keys flow)))
     
         ] 
@@ -59,8 +98,9 @@
         :change (comp complete change)
         :init (comp complete (partial change {}))
         :obliv? obliv?
+        :eager? eager?
         :parents parents
-        :children children}))
+        :children children})))
 
 (defn assoc-node- [timing flow key fun & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
@@ -69,20 +109,16 @@
         (throw (Exception. (.concat "Node key already taken: " (name key))))
         (let [
             args (if args args [])
-            ; Parents are nodes in the flow
+            ;; Parents are nodes in the flow
             parents (set (filter (fn [key] (flow key)) args))   
-            ; A version of the function that evaluates arguments in parallel.
-            pfun #(apply fun (vpvmap force (replace % args)))
-            ;pfun identity
-            ; The flow, with the new function added
-            new-flow (assoc flow key {:fn pfun :parents parents :children #{} :timing timing})
-            ; A function adding key to the children list of a parent.
-            add-child (fn [nf p] (assoc nf p (assoc (nf p) :children (conj (:children (nf p)) key))))] 
-            ; Notify parents of new child
-            (reduce add-child new-flow parents))))
+            ;; A version of the function that evaluates arguments in parallel.
+            pfun #(apply fun (vpvmap force (replace % args)))] 
+            ;; The flow, with the new function added
+        (assoc flow key {:fn pfun :parents parents :timing timing}))))
 
 (def assoc-node (partial assoc-node- :lazy))
 (def assoc-oblivious (partial assoc-node- :oblivious))
+(def assoc-eager (partial assoc-node- :eager))
 (defn root-fn [] 
     (throw (Exception. (.concat "Root node uninitialized: " (name key)))))
 (defn assoc-root [flow key] (assoc-node- :lazy flow key root-fn []))
@@ -107,3 +143,9 @@
 
 (def forward-graph (partial flow-graph :children))
 (def backward-graph (partial flow-graph :parents))
+
+(defn profile-flow [flow]
+    "TODO: Find the average execution time of each function in the flow somehow.
+    This information can be used to optimize eager tags, as well as parallelization.
+    Figure out wall-clock time, CPU time, number of threads used etc."
+    nil)
