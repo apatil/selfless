@@ -21,8 +21,8 @@
 (def flow6 (assoc-node flow5 :q identity [:x]))
 
 
-(with-flosures (flosures flow6)
-    (inspect children)
+(with-flow flow6
+    (inspect parents)
     (def states
         (let
             [init-state (init {:x 3})

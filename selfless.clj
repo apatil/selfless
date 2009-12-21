@@ -1,5 +1,5 @@
 (ns selfless
-    (:use clojure.contrib.graph))
+    (:use clojure.contrib.graph clojure.set))
 
 ;;(set! *warn-on-reflection* true)
 
@@ -12,22 +12,24 @@
     "Forces evaluation of all the keys in the state."
     (zipmap (keys state) (vpvmap force (vals state))))
 
+(defn zipmapmap [f coll] (zipmap coll (map f coll)))
+
 (defn flosures [flow]
     "Produces fns for operating on the state of the given flow."
 
-    ;; Store the children of all the nodes in a map up front.
-    (let [children (reduce 
+    (let [  allkeys (set (keys flow))
+            parents (zipmapmap #(intersection (-> % flow :args set) allkeys) allkeys)
+            children (reduce 
                         (fn [cm [c p]] (assoc cm p (conj (cm p) c)))
-                        (zipmap (keys flow) (repeat #{}))
+                        (zipmap allkeys (repeat #{}))
                         ;; Reduce over all the parent-child pairs in the flow
-                        (for [c (keys flow) p (-> c flow :parents)] [c p]))]
+                        (for [c allkeys p (parents c)] [c p]))]
     
     (letfn [
         
         (timing [key] (-> key flow :timing))
         (obliv? [key] (= (timing key) :oblivious))
         (eager? [key] (=  (timing key) :eager))
-        (parents [key] (-> key flow :parents))
         
         ;; ===================================
         ;; = Destroying state after a change =
@@ -68,7 +70,12 @@
         ;; =======================
         
         ;; Computes the value at the key.
-        (compute-key [key state] ((:fn (flow key)) state))
+        (compute-key [key state] 
+            (let [parent-state (select-keys state (parents key))]
+                (apply (:fn (flow key))
+                     (replace 
+                         (zipmap (keys parent-state) (vpvmap force (vals parent-state)))
+                         (-> key flow :args)))))
 
         ;; Whether the state has all the parents of the key.
         (has-all-parents [key state]
@@ -89,7 +96,7 @@
                             (delay (compute-key key state-)))))))   
         
         ;; Adds all keys' values to the state, wrapped in delays.        
-        (complete [state] (reduce add-delay state (keys flow)))
+        (complete [state] (reduce add-delay state allkeys))
     
         ] 
         {:flow flow
@@ -100,21 +107,16 @@
         :obliv? obliv?
         :eager? eager?
         :parents parents
-        :children children})))
+        :children children
+        :allkeys allkeys})))
 
 (defn assoc-node- [timing flow key fun & [args]]
     "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
     (if (flow key) 
         (throw (Exception. (.concat "Node key already taken: " (name key))))
-        (let [
-            args (if args args [])
-            ;; Parents are nodes in the flow
-            parents (set (filter (fn [key] (flow key)) args))   
-            ;; A version of the function that evaluates arguments in parallel.
-            pfun #(apply fun (vpvmap force (replace % args)))] 
-            ;; The flow, with the new function added
-        (assoc flow key {:fn pfun :parents parents :timing timing}))))
+        (let [args (if args args [])]
+        (assoc flow key {:fn fun :timing timing :args args}))))
 
 (def assoc-node (partial assoc-node- :lazy))
 (def assoc-oblivious (partial assoc-node- :oblivious))
@@ -136,6 +138,11 @@
     (let [f (eval flosures)
             v (vec (mapcat (fn [[key val]] [(symbol (name key)) (list flosures key)]) f))]
         `(let ~v ~@exprs)))
+        
+(defmacro with-flow [flow & exprs]
+    "Like let-bindings, but provides update, forget and change
+    functions in context of flow."
+    `(with-flosures (flosures ~flow) ~@exprs))
                 
 (defn flow-graph [dir flow]
     "Returns a clojure-contrib graph corresponding to the given flow."

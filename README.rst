@@ -20,7 +20,7 @@ First, build a dataflow::
     (def flow2 (add-node flow :fn2 fn2 [:fn1 17 :fn1 2 5]))
     (def flow3 (add-oblivious flow2 :fn3 fn3 [:fn2]))
 
-The arguments of ``add-node`` and ``add-oblivious`` are ``[flow key fun & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents, children, and timing slots. Timing can be lazy (the default) and oblivious, meaning a node does not do anything in response to parent updates. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & that a value for it must be provided.
+The arguments of ``add-node`` and ``add-oblivious`` are ``[flow key fun & [args]]``. The resulting dataflow is a ``{:key node}`` map. Nodes hold functions, parents and timing slots. Timing can be lazy (the default) and oblivious, meaning a node does not do anything in response to parent updates. ``add-root`` is a version of ``add-node`` that assumes the node has no parents & that a value for it must be provided.
 
 Having created the dataflow, you can create functions ``flow3-init``, ``flow3-forget`` and ``flow3-change`` with::
     
