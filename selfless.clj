@@ -146,7 +146,9 @@
                 
 (defn flow-graph [dir flow]
     "Returns a clojure-contrib graph corresponding to the given flow."
-    (struct directed-graph (keys flow) #(dir (flow %))))
+    (let [fls (flosures flow)
+            acc (comp dir fls)]
+        (struct directed-graph (keys flow) #(acc (flow %)))))
 
 (def forward-graph (partial flow-graph :children))
 (def backward-graph (partial flow-graph :parents))
