@@ -8,15 +8,16 @@
 ;; (def vpvmap pmap)
 (def vpvmap map)
 
-(defn force-state [state] 
+(defn force-state 
     "Forces evaluation of all the keys in the state."
+    [state] 
     (zipmap (keys state) (vpvmap force (vals state))))
 
 (defn zipmapmap [f coll] (zipmap coll (map f coll)))
 
-(defn flosures [flow]
+(defn flosures 
     "Produces fns for operating on the state of the given flow."
-
+    [flow]
     (let [  allkeys (set (keys flow))
             parents (zipmapmap #(intersection (-> % flow :args set) allkeys) allkeys)
             children (reduce 
@@ -110,9 +111,10 @@
         :children children
         :allkeys allkeys})))
 
-(defn assoc-node- [timing flow key fun & [args]]
+(defn assoc-node- 
     "Adds fun as a node to the dataflow flow, with key 'key'. 
     Labels must be unique within dataflows."
+    [timing flow key fun & [args]]
     (if (flow key) 
         (throw (Exception. (.concat "Node key already taken: " (name key))))
         (let [args (if args args [])]
@@ -125,34 +127,39 @@
     (throw (Exception. (.concat "Root node uninitialized: " (name key)))))
 (defn assoc-root [flow key] (assoc-node- :lazy flow key root-fn []))
     
-(defmacro def-flosures [flow]
+(defmacro def-flosures 
     "Binds the flow's 'methods' to vars."
+    [flow]
     (let [sym-dash (.concat (name flow) "-")
         name-fn #(.concat sym-dash (name %))
         flosures (-> flow eval flosures)]
     (cons 'do (map (fn [[key val]] `(def ~(symbol (name-fn key)) ~val)) flosures))))
 
-(defmacro with-flosures [flosures & exprs] 
+(defmacro with-flosures 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
+    [flosures & exprs] 
     (let [f (eval flosures)
             v (vec (mapcat (fn [[key val]] [(symbol (name key)) (list flosures key)]) f))]
         `(let ~v ~@exprs)))
         
-(defmacro with-flow [flow & exprs]
+(defmacro with-flow 
     "Like let-bindings, but provides update, forget and change
     functions in context of flow."
+    [flow & exprs]
     `(with-flosures (flosures ~flow) ~@exprs))
                 
-(defn flow-graph [dir fls]
+(defn flow-graph 
     "Returns a clojure-contrib graph corresponding to the given flow."
+    [dir fls]
     (struct directed-graph (keys (:flow fls)) (dir fls)))
 
 (def forward-graph (partial flow-graph :children))
 (def backward-graph (partial flow-graph :parents))
 
-(defn profile-flow [flow]
+(defn profile-flow 
     "TODO: Find the average execution time of each function in the flow somehow.
     This information can be used to optimize eager tags, as well as parallelization.
     Figure out wall-clock time, CPU time, number of threads used etc."
+    [flow]
     nil)
