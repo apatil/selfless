@@ -144,11 +144,9 @@
     functions in context of flow."
     `(with-flosures (flosures ~flow) ~@exprs))
                 
-(defn flow-graph [dir flow]
+(defn flow-graph [dir fls]
     "Returns a clojure-contrib graph corresponding to the given flow."
-    (let [fls (flosures flow)
-            acc (comp dir fls)]
-        (struct directed-graph (keys flow) #(acc (flow %)))))
+    (struct directed-graph (keys (:flow fls)) (dir fls)))
 
 (def forward-graph (partial flow-graph :children))
 (def backward-graph (partial flow-graph :parents))
